@@ -65,6 +65,7 @@ import {
 import { LoginScreen } from './components/LoginScreen.js';
 import { AdminPanel } from './components/AdminPanel.js';
 import { ProfileModal } from './components/ProfileModal.js';
+import { DocumentSystem } from './components/DocumentSystem.js';
 
 // Safe sandbox-friendly localStorage helper
 const safeStorage = {
@@ -1173,197 +1174,22 @@ export default function App() {
                 </div>
               </div>
             </div>
-          )}
-
-          {/* VIEW 2: DEPARTMENT ARCHIVE (EXPLORER) */}
+          )}          {/* VIEW 2: DEPARTMENT ARCHIVE (EXPLORER) */}
           {activeTab === 'explorer' && (
-            <div className="space-y-6 text-left">
-              
-              {/* Folder explorer header */}
-              <div className={`border rounded-2xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${theme === 'dark' ? 'bg-slate-900 border-slate-850' : 'bg-white border-slate-200/80'}`}>
-                <div>
-                  <h3 className="text-base font-bold flex items-center gap-2">
-                    <Folder className="w-5 h-5 text-emerald-500" />
-                    <span>{DEPARTMENTS.find(d => d.id === activeDeptId)?.name}</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Cabinet folder indices filtered exclusively for physical audit operations.</p>
-                </div>
-                
-                {/* Add Category Trigger */}
-                {currentUser?.role !== 'Viewer' ? (
-                  <button 
-                    onClick={() => setShowAddCatModal(true)}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/5 cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Create Category</span>
-                  </button>
-                ) : (
-                  <span className="text-xs text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/25 font-bold font-mono">
-                    Viewer Mode: Creation Restricted
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                {/* Category selectors Left Column */}
-                <div className="lg:col-span-4 space-y-3">
-                  <div className={`rounded-2xl border p-4 shadow-sm ${theme === 'dark' ? 'bg-slate-900 border-slate-850' : 'bg-white border-slate-200/80'}`}>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100/10 pb-1.5 font-mono">Catalog Folders</p>
-                    <div className="space-y-1 max-h-[350px] overflow-y-auto">
-                      {categories.filter(c => c.departmentId === activeDeptId).map(cat => (
-                        <button
-                          key={cat.id}
-                          onClick={() => setSelectedCategoryValue(cat.name)}
-                          className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
-                            selectedCategorValue === cat.name 
-                              ? 'bg-slate-100 dark:bg-slate-950 text-emerald-500 border border-emerald-500/20' 
-                              : 'text-slate-400 hover:bg-slate-100/30'
-                          }`}
-                        >
-                          <span className="truncate max-w-[160px]">{cat.name}</span>
-                          <span className="px-1.5 bg-slate-200 dark:bg-slate-800 text-[9px] font-mono rounded-md font-bold">
-                            {files.filter(f => f.department === activeDeptId && f.category === cat.name).length}
-                          </span>
-                        </button>
-                      ))}
-
-                      {categories.filter(c => c.departmentId === activeDeptId).length === 0 && (
-                        <p className="text-xs text-slate-500 italic py-4">No active categories. Create one above.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Attachment Scanning Registry Form (Single) */}
-                  {currentUser?.role !== 'Viewer' && (
-                    <div className={`rounded-2xl border p-4 shadow-sm ${theme === 'dark' ? 'bg-slate-900 border-slate-850' : 'bg-white border-slate-200/80'} text-left space-y-3`}>
-                      <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-850 pb-2">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">AI Scanners Registry</p>
-                        
-                        {/* Preset templates selector */}
-                        <select
-                          value={selectedUploadTemplate !== null ? selectedUploadTemplate : ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '') {
-                              setSelectedUploadTemplate(null);
-                              setCustomUploadName('');
-                              setCustomUploadText('');
-                            } else {
-                              const num = parseInt(val);
-                              setSelectedUploadTemplate(num);
-                              setCustomUploadName(TEST_DOCUMENT_TEMPLATES[num].name);
-                              setCustomUploadText(TEST_DOCUMENT_TEMPLATES[num].textContent);
-                            }
-                          }}
-                          className="text-[10px] border border-slate-200 dark:border-slate-850 bg-slate-100 dark:bg-slate-950 px-2 py-0.5 rounded text-slate-550 outline-none"
-                        >
-                          <option value="">Load DIU Template</option>
-                          {TEST_DOCUMENT_TEMPLATES.map((t, i) => (
-                            <option key={i} value={i}>{t.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          required
-                          placeholder="Attachment Ref Name (e.g. thesis.pdf)"
-                          value={customUploadName}
-                          onChange={(e) => setCustomUploadName(e.target.value)}
-                          className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-lg px-2.5 py-1.5 outline-none text-slate-400"
-                        />
-                        
-                        <textarea
-                          required
-                          rows={4}
-                          placeholder="OCR Extracted raw text transcripts..."
-                          value={customUploadText}
-                          onChange={(e) => setCustomUploadText(e.target.value)}
-                          className="w-full text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-lg px-2.5 py-1.5 outline-none text-slate-400"
-                        />
-                      </div>
-
-                      {/* Display loading progress if active */}
-                      {uploadProgress !== null && (
-                        <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500 animate-pulse" style={{ width: `${Math.min(100, uploadProgress)}%` }} />
-                        </div>
-                      )}
-
-                      <button
-                        onClick={handleAIScanAnalysis}
-                        disabled={uploadProgress !== null}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 border-sky-950 text-white font-bold text-xs rounded-lg cursor-pointer"
-                      >
-                        {uploadProgress !== null ? 'AI Categorizing...' : 'Trigger AI Registration Scan'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Files index list Right Column */}
-                <div className="lg:col-span-8 space-y-4">
-                  <div className={`rounded-2xl border p-5 shadow-sm ${theme === 'dark' ? 'bg-slate-900 border-slate-850' : 'bg-white border-slate-200/80'} min-h-[400px]`}>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 font-mono select-none">
-                      📂 File Cataloging: {selectedCategorValue}
-                    </p>
-
-                    <div className="space-y-4">
-                      {files.filter(f => f.department === activeDeptId && f.category === selectedCategorValue).map(file => (
-                        <div 
-                          key={file.id}
-                          className={`p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-950/40 border-slate-850' : 'bg-slate-50 border-slate-100'} flex flex-col md:flex-row justify-between gap-4`}
-                        >
-                          <div className="space-y-2 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/15 px-1.5 py-0.2 rounded font-mono font-bold text-[9px] uppercase tracking-wider">
-                                {file.type}
-                              </span>
-                              <h4 className="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-150">{file.name}</h4>
-                            </div>
-
-                            <p className="text-[11px] text-slate-500 leading-normal">{file.aiSummary || 'Document indexed.'}</p>
-                            
-                            <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] text-slate-500 pt-1">
-                              {file.studentId && <span>Student ID: <span className="font-bold text-slate-400">{file.studentId}</span></span>}
-                              {file.employeeId && <span>Employee ID: <span className="font-bold text-slate-400">{file.employeeId}</span></span>}
-                              <span>Cabinet: <span className="font-bold text-indigo-400">{file.hardCopyDetails.cabinetNumber}</span> • Box: <span className="font-bold text-indigo-400">{file.hardCopyDetails.boxNumber}</span> • Serial: <span className="font-bold text-emerald-500">{file.hardCopyDetails.fileSerial}</span></span>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-row md:flex-col items-center justify-between md:justify-center gap-3 shrink-0">
-                            {/* QR badge printing renderer */}
-                            <QRCodeView value={file.qrData} size={90} />
-                            
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase inline-block ${
-                              file.status === 'Active' 
-                                ? 'bg-emerald-500/10 text-emerald-500' 
-                                : file.status === 'Out'
-                                ? 'bg-amber-500/10 text-amber-500 animate-pulse'
-                                : 'bg-slate-500/10 text-slate-500'
-                            }`}>
-                              {file.status === 'Active' ? 'Cabinet Secured' : 'Checked Out'}
-                            </span>
-                          </div>
-
-                        </div>
-                      ))}
-
-                      {files.filter(f => f.department === activeDeptId && f.category === selectedCategorValue).length === 0 && (
-                        <div className="p-12 text-center text-slate-500 italic">
-                          No document index registries have been cataloged in this folder yet. Use templates or scans to index item.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
+            <DocumentSystem
+              files={files}
+              setFiles={setFiles}
+              currentUser={currentUser}
+              theme={theme}
+              activeDeptId={activeDeptId}
+              setSelectedDeptId={setSelectedDeptId}
+              selectedCategorValue={selectedCategorValue}
+              setSelectedCategoryValue={setSelectedCategoryValue}
+              categories={categories}
+              addLog={addLog}
+              notifyUser={notifyUser}
+              themeClass={theme === 'dark' ? 'dark' : 'light'}
+            />
           )}
 
           {/* VIEW 3: SMART SEMANTIC SEARCH (GEMINI) */}

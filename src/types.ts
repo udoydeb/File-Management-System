@@ -33,7 +33,7 @@ export interface UniversityFile {
   employeeId?: string;
   uploadDate: string;
   size: string;
-  status: 'Active' | 'Archived' | 'Out';
+  status: 'Active' | 'Archived' | 'Out' | 'Pending Review' | 'Confidential' | 'Approved';
   tags: string[];
   aiSummary?: string;
   fileVersion: number;
@@ -41,6 +41,14 @@ export interface UniversityFile {
   storageHash: string;
   hardCopyDetails: HardCopyDetails;
   textContent: string;
+  versionHistory?: Array<{
+    version: number;
+    uploadDate: string;
+    size: string;
+    changedBy: string;
+    hash: string;
+    note?: string;
+  }>;
 }
 
 export interface BulkUploadedFile {
