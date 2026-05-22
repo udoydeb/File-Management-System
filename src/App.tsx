@@ -66,6 +66,27 @@ import { LoginScreen } from './components/LoginScreen.js';
 import { AdminPanel } from './components/AdminPanel.js';
 import { ProfileModal } from './components/ProfileModal.js';
 
+// Safe sandbox-friendly localStorage helper
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (_) {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (_) {}
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (_) {}
+  }
+};
+
 // Reusable QRCode QR Component
 function QRCodeView({ value, size = 130 }: { value: string; size?: number }) {
   const [dataUrl, setDataUrl] = useState('');
@@ -87,13 +108,13 @@ function QRCodeView({ value, size = 130 }: { value: string; size?: number }) {
 
 export default function App() {
   // --- AUTH STATES ---
-  const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('diu_auth_token'));
+  const [authToken, setAuthToken] = useState<string | null>(() => safeStorage.getItem('diu_auth_token'));
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   // Theme Settings state: 'light' | 'dark'
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('diu_theme') as 'light' | 'dark') || 'light';
+    return (safeStorage.getItem('diu_theme') as 'light' | 'dark') || 'light';
   });
 
   // App tabs: 'dashboard' | 'explorer' | 'search' | 'movement' | 'qr-depot' | 'logs' | 'employee-mgmt'
@@ -122,7 +143,7 @@ export default function App() {
 
   // University files database
   const [files, setFiles] = useState<UniversityFile[]>(() => {
-    const saved = localStorage.getItem('diu_archive_files');
+    const saved = safeStorage.getItem('diu_archive_files');
     if (saved) {
       try { return JSON.parse(saved); } catch(_) {}
     }
@@ -228,12 +249,12 @@ export default function App() {
 
   // Save files to localStorage
   useEffect(() => {
-    localStorage.setItem('diu_archive_files', JSON.stringify(files));
+    safeStorage.setItem('diu_archive_files', JSON.stringify(files));
   }, [files]);
 
   // File Checkouts DB
   const [checkouts, setCheckouts] = useState<FileCheckout[]>(() => {
-    const saved = localStorage.getItem('diu_checkouts');
+    const saved = safeStorage.getItem('diu_checkouts');
     return saved ? JSON.parse(saved) : [
       {
         id: 'chk-01',
@@ -252,7 +273,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('diu_checkouts', JSON.stringify(checkouts));
+    safeStorage.setItem('diu_checkouts', JSON.stringify(checkouts));
   }, [checkouts]);
 
   // System Notifications
@@ -320,7 +341,7 @@ export default function App() {
             if (firstCat) setSelectedCategoryValue(firstCat.name);
           }
         } else {
-          localStorage.removeItem('diu_auth_token');
+          safeStorage.removeItem('diu_auth_token');
           setAuthToken(null);
           setCurrentUser(null);
         }
@@ -366,7 +387,7 @@ export default function App() {
 
   // Login Callback success
   const handleLoginSuccess = (token: string, user: any) => {
-    localStorage.setItem('diu_auth_token', token);
+    safeStorage.setItem('diu_auth_token', token);
     setAuthToken(token);
     setCurrentUser(user);
     if (user.role !== 'Super Admin') {
@@ -385,7 +406,7 @@ export default function App() {
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
     } catch (_) {}
-    localStorage.removeItem('diu_auth_token');
+    safeStorage.removeItem('diu_auth_token');
     setAuthToken(null);
     setCurrentUser(null);
     notifyUser('Secure session terminated successfully.', 'info');
@@ -884,7 +905,7 @@ export default function App() {
               onClick={() => {
                 const toggled = theme === 'light' ? 'dark' : 'light';
                 setTheme(toggled);
-                localStorage.setItem('diu_theme', toggled);
+                safeStorage.setItem('diu_theme', toggled);
               }}
               title={`Switch to ${theme === 'light' ? 'Cosmic Dark' : 'Bright Light'} Mode`}
               className="p-2.5 bg-slate-800 hover:bg-slate-755 border border-slate-750 text-amber-400 hover:text-amber-300 rounded-xl transition-colors cursor-pointer"
