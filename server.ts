@@ -1,21 +1,18 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
+import express from 'express';
 import path from 'path';
-import { defineConfig } from 'vite';
+import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Standard body parser helper for Connect middlewares
-function getBody(req: any): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk: any) => { body += chunk; });
-    req.on('end', () => { resolve(body); });
-    req.on('error', (err: any) => { reject(err); });
-  });
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json({ limit: '50mb' }));
 
 // Instantiate Gemini SDK client if API key is present
 const apiKey = process.env.GEMINI_API_KEY;
@@ -31,63 +28,46 @@ if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
   });
 }
 
-export default defineConfig(() => {
-  return {
-    plugins: [
-      react(), 
-      tailwindcss(),
-      {
-        name: 'full-stack-api',
-        configureServer(server) {
-          server.middlewares.use(async (req, res, next) => {
-            const url = req.url || '';
-            
-            if (url.startsWith('/api/')) {
-              res.setHeader('Content-Type', 'application/json');
-              res.setHeader('Access-Control-Allow-Origin', '*');
-              res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-              res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-              
-              if (req.method === 'OPTIONS') {
-                res.statusCode = 200;
-                res.end();
-                return;
-              }
+// Enable CORS
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
-              try {
-                // Status endpoint
-                if (url === '/api/status') {
-                  res.statusCode = 200;
-                  res.end(JSON.stringify({
-                    status: 'success',
-                    timestamp: new Date().toISOString(),
-                    university: 'Daffodil International University (DIU)',
-                    geminiConfigured: !!ai,
-                    message: 'DIU Central Archive API Active'
-                  }));
-                  return;
-                }
+// GET Status
+app.get('/api/status', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    timestamp: new Date().toISOString(),
+    university: 'Daffodil International University (DIU)',
+    geminiConfigured: !!ai,
+    message: 'DIU Smart Archive Production Server Active'
+  });
+});
 
-                // AI Document classification & extraction endpoint
-                if (url === '/api/gemini/analyze' && req.method === 'POST') {
-                  const rawBody = await getBody(req);
-                  const { fileName, textContent, fileType } = JSON.parse(rawBody || '{}');
-                  
-                  if (!textContent) {
-                    res.statusCode = 400;
-                    res.end(JSON.stringify({ error: 'No content provided for analysis' }));
-                    return;
-                  }
+// POST Analyze documents with Gemini
+app.post('/api/gemini/analyze', async (req, res) => {
+  try {
+    const { fileName, textContent, fileType } = req.body;
+    
+    if (!textContent) {
+      return res.status(400).json({ error: 'No content provided for analysis' });
+    }
 
-                  let resJson: any;
+    let resJson: any;
 
-                  if (ai) {
-                    try {
-                      const response = await ai.models.generateContent({
-                        model: 'gemini-3.5-flash',
-                        contents: `Document Name: ${fileName || 'Unnamed Document'}\nFile Type: ${fileType || 'Unknown'}\nDocument Contents:\n${textContent}`,
-                        config: {
-                          systemInstruction: `You are the DIU Smart Archive AI OCR and Document Classifier.
+    if (ai) {
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: `Document Name: ${fileName || 'Unnamed Document'}\nFile Type: ${fileType || 'Unknown'}\nDocument Contents:\n${textContent}`,
+          config: {
+            systemInstruction: `You are the DIU Smart Archive AI OCR and Document Classifier.
 Analyze the provided document text and meta context, and return a clean JSON object according to this exact typescript schema:
 {
   "fileName": string (the official title or a normalized file name),
@@ -105,50 +85,49 @@ Analyze the provided document text and meta context, and return a clean JSON obj
 }
 Generate sensible spatial archiving allocations for physical copy management.
 Return ONLY valid JSON. Avoid markdown blocks.`,
-                          responseMimeType: 'application/json'
-                        }
-                      });
-                      
-                      const parsedText = response.text || '{}';
-                      resJson = JSON.parse(parsedText.replace(/```json|```/g, '').trim());
-                    } catch (err: any) {
-                      console.error('Gemini call failed, utilizing local fallback parser', err);
-                      resJson = generateFallbackAnalysis(fileName, textContent, fileType);
-                    }
-                  } else {
-                    resJson = generateFallbackAnalysis(fileName, textContent, fileType);
-                  }
+            responseMimeType: 'application/json'
+          }
+        });
+        
+        const parsedText = response.text || '{}';
+        resJson = JSON.parse(parsedText.replace(/```json|```/g, '').trim());
+      } catch (err) {
+        console.error('Gemini call failed, fallback to local', err);
+        resJson = generateFallbackAnalysis(fileName, textContent, fileType);
+      }
+    } else {
+      resJson = generateFallbackAnalysis(fileName, textContent, fileType);
+    }
 
-                  res.statusCode = 200;
-                  res.end(JSON.stringify(resJson));
-                  return;
-                }
+    return res.status(200).json(resJson);
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'API Analysis error' });
+  }
+});
 
-                // AI Smart Semantic Search Endpoint
-                if (url === '/api/gemini/smart-search' && req.method === 'POST') {
-                  const rawBody = await getBody(req);
-                  const { filesList, query } = JSON.parse(rawBody || '{}');
+// POST Semantic File Smart Search with Gemini
+app.post('/api/gemini/smart-search', async (req, res) => {
+  try {
+    const { filesList, query } = req.body;
 
-                  if (!query || !filesList) {
-                    res.statusCode = 400;
-                    res.end(JSON.stringify({ error: 'Search query and files list are required.' }));
-                    return;
-                  }
+    if (!query || !filesList) {
+      return res.status(400).json({ error: 'Query and documents are required' });
+    }
 
-                  let rankedFiles = [];
+    let rankedFiles = [];
 
-                  if (ai && filesList.length > 0) {
-                    try {
-                      const filesPayload = filesList.map((f: any) => ({
-                        id: f.id,
-                        name: f.name,
-                        category: f.category,
-                        tags: f.tags,
-                        aiSummary: f.aiSummary,
-                        department: f.department
-                      }));
+    if (ai && filesList.length > 0) {
+      try {
+        const filesPayload = filesList.map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          category: f.category,
+          tags: f.tags,
+          aiSummary: f.aiSummary,
+          department: f.department
+        }));
 
-                      const prompt = `You are a semantic search ranking engine. Find documents that are semantically relevant to this search query: "${query}"
+        const prompt = `You are a semantic search ranking engine. Find documents that are semantically relevant to this search query: "${query}"
 
 Here is the list of available university documents:
 ${JSON.stringify(filesPayload, null, 2)}
@@ -161,57 +140,31 @@ Output Schema:
 ]
 Return ONLY pure JSON.`;
 
-                      const response = await ai.models.generateContent({
-                        model: 'gemini-3.5-flash',
-                        contents: prompt,
-                        config: {
-                          responseMimeType: 'application/json'
-                        }
-                      });
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json'
+          }
+        });
 
-                      const parsedResponse = JSON.parse((response.text || '[]').replace(/```json|```/g, '').trim());
-                      rankedFiles = parsedResponse;
-                    } catch (err) {
-                      console.error('Semantic search failed, fallback to local search', err);
-                      rankedFiles = localSemanticSearch(filesList, query);
-                    }
-                  } else {
-                    rankedFiles = localSemanticSearch(filesList, query);
-                  }
-
-                  res.statusCode = 200;
-                  res.end(JSON.stringify({ results: rankedFiles }));
-                  return;
-                }
-
-                // Unknown route handler
-                res.statusCode = 404;
-                res.end(JSON.stringify({ error: 'Route not found' }));
-                
-              } catch (error: any) {
-                res.statusCode = 500;
-                res.end(JSON.stringify({ error: error.message || 'Internal API Error' }));
-              }
-            } else {
-              next();
-            }
-          });
-        }
+        const parsedResponse = JSON.parse((response.text || '[]').replace(/```json|```/g, '').trim());
+        rankedFiles = parsedResponse;
+      } catch (err) {
+        console.error('Semantic search failed, fallback to local', err);
+        rankedFiles = localSemanticSearch(filesList, query);
       }
-    ],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
-    },
-    server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
-  };
+    } else {
+      rankedFiles = localSemanticSearch(filesList, query);
+    }
+
+    return res.status(200).json({ results: rankedFiles });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Smart search error' });
+  }
 });
 
-// Helper: Generates beautiful mock AI metadata results based on document contents
+// Helper parsing fallback
 function generateFallbackAnalysis(fileName: string, text: string, type: string) {
   const fileLower = (fileName || '').toLowerCase();
   const textLower = (text || '').toLowerCase();
@@ -222,7 +175,6 @@ function generateFallbackAnalysis(fileName: string, text: string, type: string) 
   let tags = ['university', 'office'];
   let aiSummary = 'General university administrative file containing official transcripts and records.';
   
-  // Categorization heuristics
   if (fileLower.includes('salary') || fileLower.includes('payroll') || textLower.includes('salary') || textLower.includes('ta/da') || textLower.includes('allowance')) {
     category = 'Salary Files';
     tags = ['hr', 'finance', 'payroll', 'accounts'];
@@ -261,14 +213,12 @@ function generateFallbackAnalysis(fileName: string, text: string, type: string) 
     aiSummary = 'Peer-reviewed scholarly paper contributed by DIU faculty departments. Tracks impact factors and citations.';
   }
 
-  // Extract ID heuristics
   const stdIdMatch = text.match(/\b\d{3}-\d{2}-\d{3,5}\b/);
   if (stdIdMatch) studentId = stdIdMatch[0];
   
   const empIdMatch = text.match(/\b(EMP-\d{3,5}|DIU-EMP-\d{3,5})\b/i);
   if (empIdMatch) employeeId = empIdMatch[0].toUpperCase();
 
-  // Generate cabinet slots pseudo-randomly but stably relative to filestring size
   const codeSum = (fileName || 'DIU').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   const cabCode = String.fromCharCode(65 + (codeSum % 6)); // A-F
   const shelfCode = (codeSum % 4) + 1; // 1-4
@@ -291,7 +241,7 @@ function generateFallbackAnalysis(fileName: string, text: string, type: string) 
   };
 }
 
-// Local Semantic Search simulation
+// Local Semantic Search
 function localSemanticSearch(filesList: any[], query: string) {
   const queryLower = query.toLowerCase();
   
@@ -301,13 +251,11 @@ function localSemanticSearch(filesList: any[], query: string) {
 
     const fileText = `${file.name} ${file.category} ${(file.tags || []).join(' ')} ${file.aiSummary || ''} ${file.department}`.toLowerCase();
     
-    // Direct matches
     if (fileText.includes(queryLower)) {
       score += 40;
       reasons.push('Direct keyword query matched');
     }
 
-    // Semantic correlations
     if (queryLower === 'payroll' || queryLower === 'salary' || queryLower === 'money' || queryLower === 'fee' || queryLower === 'bank') {
       if (file.category === 'Salary Files' || file.category === 'Accounts Office') {
         score += 50;
@@ -342,3 +290,17 @@ function localSemanticSearch(filesList: any[], query: string) {
   .filter(f => f.score > 10)
   .sort((a,b) => b.score - a.score);
 }
+
+// Serve production client static build from /dist
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
+
+// For SPA routing, hand over non-matched routes to index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// Bind server on port 3000
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server starting robustly on http://0.0.0.0:${PORT}`);
+});
