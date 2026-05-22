@@ -66,6 +66,7 @@ import { LoginScreen } from './components/LoginScreen.js';
 import { AdminPanel } from './components/AdminPanel.js';
 import { ProfileModal } from './components/ProfileModal.js';
 import { DocumentSystem } from './components/DocumentSystem.js';
+import { CabinetDirectory } from './components/CabinetDirectory.js';
 
 // Safe sandbox-friendly localStorage helper
 const safeStorage = {
@@ -972,6 +973,7 @@ export default function App() {
               {[
                 { id: 'dashboard', label: 'Dashboard Center', icon: LayoutDashboard },
                 { id: 'explorer', label: 'Department Archive', icon: Folder },
+                { id: 'cabinets', label: 'Cabinet Directory', icon: Layers },
                 { id: 'search', label: 'Smart Search AI', icon: Search },
                 { id: 'movement', label: 'Folder Checkouts', icon: Clock },
                 { id: 'qr-depot', label: 'Printed QR Badges', icon: QrCode },
@@ -1189,6 +1191,19 @@ export default function App() {
               addLog={addLog}
               notifyUser={notifyUser}
               themeClass={theme === 'dark' ? 'dark' : 'light'}
+            />
+          )}
+
+          {activeTab === 'cabinets' && (
+            <CabinetDirectory
+              files={files}
+              setFiles={setFiles}
+              currentUser={currentUser}
+              addLog={addLog}
+              notifyUser={notifyUser}
+              checkouts={checkouts}
+              setCheckouts={setCheckouts}
+              theme={theme}
             />
           )}
 

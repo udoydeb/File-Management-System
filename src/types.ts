@@ -124,3 +124,35 @@ export interface ServerAccessLog {
   device: string;
   status: 'Success' | 'Failed';
 }
+
+export interface Box {
+  id: string;
+  shelfId: string;
+  name: string;
+}
+
+export interface Shelf {
+  id: string;
+  cabinetId: string;
+  name: string;
+  boxes: Box[];
+}
+
+export interface Cabinet {
+  id: string;
+  name: string;
+  code: string;
+  departmentId: string;
+  description: string;
+  shelfCount: number;
+  status: 'Active' | 'Full' | 'Archived' | 'Restricted' | 'Maintenance';
+  createdBy: string;
+  createdAt: string;
+  responsibleEmployee: string;
+  cabinetType: string;
+  accessLevel: 'Restricted-Admin' | 'Staff-Only' | 'Public-Viewable' | 'Confidential';
+  color: string;
+  shelves: Shelf[];
+  lastUpdated: string;
+}
+
