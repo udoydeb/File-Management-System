@@ -1342,7 +1342,7 @@ export function CabinetDirectory({
                 <div className="flex justify-center select-all cursor-pointer">
                   {activeCabinet && (
                     <QRCodeView 
-                      value={`diu-archive://cabinet/${activeCabinet.code}`} 
+                      value={`${typeof window !== 'undefined' ? window.location.origin : 'https://archive.diu.edu.bd'}/cabinet/${activeCabinet.code.toLowerCase()}`} 
                       size={110} 
                       label={`${activeCabinet.code} QR Badge`} 
                     />
@@ -1351,8 +1351,8 @@ export function CabinetDirectory({
 
                 <div className="text-left bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 text-[10px] font-mono text-slate-500 leading-normal">
                   <p className="font-bold uppercase text-slate-400 mb-0.5">Cabinet URL Binding:</p>
-                  <p className="truncate text-slate-500 select-all border-b border-dashed border-slate-200 pb-1 cursor-copy" title="Copy metadata route">
-                    diu-archive://cabinet/{activeCabinet?.code}
+                  <p className="truncate text-indigo-500 select-all border-b border-dashed border-slate-200 pb-1 cursor-copy" title="Copy metadata route">
+                    {typeof window !== 'undefined' ? window.location.origin : 'https://archive.diu.edu.bd'}/cabinet/{activeCabinet?.code.toLowerCase()}
                   </p>
                   <p className="mt-1 text-[9px] text-slate-400 font-sans">
                     Mounting this adhesive labels key physically to the locker face triggers direct visual indexes directories on smart scanner queries.

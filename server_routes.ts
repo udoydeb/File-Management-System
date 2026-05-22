@@ -990,6 +990,45 @@ Return ONLY pure JSON.`;
       return true;
     }
 
+    // 18. Category Files and QR Metadata Endpoint
+    const actualPath = url.split('?')[0];
+    const categoryFilesMatch = actualPath.match(/^\/api\/category\/([^/]+)\/files$/);
+    if (categoryFilesMatch && req.method === 'GET') {
+      const idOrSlug = categoryFilesMatch[1].trim();
+      const targetCategory = db.categories.find(c => 
+        c.id.toLowerCase() === idOrSlug.toLowerCase() || 
+        c.slug.toLowerCase() === idOrSlug.toLowerCase()
+      );
+
+      if (!targetCategory) {
+        sendJSON(res, 404, { error: `Category folder matching "${idOrSlug}" not found in university master index.` });
+        return true;
+      }
+
+      const filesInside = db.files.filter(f => 
+        f.category.toLowerCase() === targetCategory.name.toLowerCase()
+      );
+
+      sendJSON(res, 200, {
+        success: true,
+        category: {
+          id: targetCategory.id,
+          name: targetCategory.name,
+          slug: targetCategory.slug,
+          department_id: targetCategory.departmentId,
+          qr_url: targetCategory.qr_url,
+          desc: targetCategory.desc
+        },
+        files: filesInside,
+        qr_metadata: {
+          scannedAt: new Date().toISOString(),
+          secure_hash: crypto.createHash('sha256').update(targetCategory.id + Date.now().toString()).digest('hex'),
+          authorized_roles: ['Super Admin', 'Department Admin', 'Employee', 'Viewer']
+        }
+      });
+      return true;
+    }
+
     // Default: Route not matched in central router structure
     return false;
 

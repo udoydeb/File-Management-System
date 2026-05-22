@@ -89,6 +89,12 @@ const safeStorage = {
   }
 };
 
+export function getCategoryQRUrl(cat: { id: string; name: string; departmentId: string }) {
+  const slug = cat.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://archive.diu.edu.bd';
+  return `${origin}/category/${slug}?id=${cat.id}`;
+}
+
 // Reusable QRCode QR Component
 function QRCodeView({ value, size = 130 }: { value: string; size?: number }) {
   const [dataUrl, setDataUrl] = useState('');
@@ -145,6 +151,7 @@ export default function App() {
   // Department Filters (Explorer View)
   const [selectedDeptId, setSelectedDeptId] = useState<string>('registrar');
   const [selectedCategorValue, setSelectedCategoryValue] = useState<string>('Student Records');
+  const [redirectedScan, setRedirectedScan] = useState<any | null>(null);
   
   // Custom states databases
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
@@ -173,7 +180,7 @@ export default function App() {
         tags: ['academic', 'grades', 'transcript', 'tanvir'],
         aiSummary: 'Official Spring 2025 student academic transcript for MD. Tanvir Rahman verifying absolute GPA completion (3.84) across 148 credits.',
         fileVersion: 1,
-        qrData: 'diu-archive://category/Transcripts',
+        qrData: 'https://archive.diu.edu.bd/category/transcripts?id=cat-reg-2',
         storageHash: 'c3ab8e90e1a123ffb90988ccdedaa91a457a1b',
         hardCopyDetails: {
           cabinetNumber: 'CAB-A',
@@ -183,6 +190,98 @@ export default function App() {
           responsibleEmployee: 'Fahmida Chowdhury / Registrar Staff'
         },
         textContent: 'Transcript grades records verification.'
+      },
+      {
+        id: 'file-02-jan',
+        name: 'Salary Jan 2026.pdf',
+        type: 'PDF',
+        department: 'hr',
+        category: 'Salary Files',
+        uploadDate: '2026-01-31T17:00:00Z',
+        size: '1.2 MB',
+        status: 'Active',
+        tags: ['hr', 'finance', 'payroll'],
+        aiSummary: 'Certified Spring 2026 January administrative payroll summary for faculty departments ledger.',
+        fileVersion: 1,
+        qrData: 'https://archive.diu.edu.bd/category/salary-files?id=cat-hr-2',
+        storageHash: '4a8cb87cfa0981a23eebdc782bcab08e01',
+        hardCopyDetails: {
+          cabinetNumber: 'CAB-C',
+          shelfNumber: 'Shelf 3',
+          boxNumber: 'Box 15',
+          fileSerial: 'DIU-SRL-1021',
+          responsibleEmployee: 'Tanveer Hasan / HR Officer'
+        },
+        textContent: 'January payroll transaction ledger.'
+      },
+      {
+        id: 'file-02-feb',
+        name: 'Salary Feb 2026.pdf',
+        type: 'PDF',
+        department: 'hr',
+        category: 'Salary Files',
+        uploadDate: '2026-02-28T17:00:00Z',
+        size: '1.1 MB',
+        status: 'Active',
+        tags: ['hr', 'finance', 'payroll'],
+        aiSummary: 'Certified Spring 2026 February administrative payroll summary for faculty departments ledger.',
+        fileVersion: 1,
+        qrData: 'https://archive.diu.edu.bd/category/salary-files?id=cat-hr-2',
+        storageHash: '2b8b98cf98e09f87cdba01cd82be0a2cb',
+        hardCopyDetails: {
+          cabinetNumber: 'CAB-C',
+          shelfNumber: 'Shelf 3',
+          boxNumber: 'Box 15',
+          fileSerial: 'DIU-SRL-1022',
+          responsibleEmployee: 'Tanveer Hasan / HR Officer'
+        },
+        textContent: 'February payroll transaction ledger.'
+      },
+      {
+        id: 'file-02-bonus',
+        name: 'Employee Bonus Report.xlsx',
+        type: 'XLSX',
+        department: 'hr',
+        category: 'Salary Files',
+        uploadDate: '2026-03-15T10:30:00Z',
+        size: '720 KB',
+        status: 'Active',
+        tags: ['hr', 'finance', 'bonus'],
+        aiSummary: 'Performance and Eid incentive bonus review spreadsheet detailing departmental staff tiers.',
+        fileVersion: 1,
+        qrData: 'https://archive.diu.edu.bd/category/salary-files?id=cat-hr-2',
+        storageHash: 'bf687dfa7adfa8de0ab01ce8fa098ed293a',
+        hardCopyDetails: {
+          cabinetNumber: 'CAB-C',
+          shelfNumber: 'Shelf 3',
+          boxNumber: 'Box 16',
+          fileSerial: 'DIU-SRL-1025',
+          responsibleEmployee: 'Tanveer Hasan / HR Officer'
+        },
+        textContent: 'Employee bonus distributions sheet.'
+      },
+      {
+        id: 'file-02-payroll-scan',
+        name: 'Payroll Scan.jpg',
+        type: 'PNG',
+        department: 'hr',
+        category: 'Salary Files',
+        uploadDate: '2026-05-01T11:00:00Z',
+        size: '1.9 MB',
+        status: 'Active',
+        tags: ['hr', 'finance', 'payroll', 'scanned'],
+        aiSummary: 'Scanned image copy of physically stamped official salary disbursement bank order sheets.',
+        fileVersion: 1,
+        qrData: 'https://archive.diu.edu.bd/category/salary-files?id=cat-hr-2',
+        storageHash: 'da8967bcfe098dcad780ace9fa08cfec25d321',
+        hardCopyDetails: {
+          cabinetNumber: 'CAB-C',
+          shelfNumber: 'Shelf 3',
+          boxNumber: 'Box 16',
+          fileSerial: 'DIU-SRL-1026',
+          responsibleEmployee: 'Tanveer Hasan / HR Officer'
+        },
+        textContent: 'Stamped bank clearance scan visual.'
       },
       {
         id: 'file-02',
@@ -197,7 +296,7 @@ export default function App() {
         tags: ['hr', 'finance', 'payroll'],
         aiSummary: 'Disbursed salary ledger for Dr. Touhid Bhuiyan noting base allowance and supplementary university teaching research grants.',
         fileVersion: 2,
-        qrData: 'diu-archive://category/Salary Files',
+        qrData: 'https://archive.diu.edu.bd/category/salary-files?id=cat-hr-2',
         storageHash: 'a98f10ea5cd109fabcd091aa38cc911bcdafe23',
         hardCopyDetails: {
           cabinetNumber: 'CAB-C',
@@ -220,7 +319,7 @@ export default function App() {
         tags: ['questions', 'midterms', 'cse413', 'exam-controller'],
         aiSummary: 'Officially vetted physical exam script paper for Software Architecture course outlining core structural design diagrams evaluation markers.',
         fileVersion: 1,
-        qrData: 'diu-archive://category/Exam Papers',
+        qrData: 'https://archive.diu.edu.bd/category/exam-papers?id=cat-ex-1',
         storageHash: '1e2e3ffba01a23eec780a1ccee89f9e0ab2ea01',
         hardCopyDetails: {
           cabinetNumber: 'CAB-E',
@@ -244,7 +343,7 @@ export default function App() {
         tags: ['clearance', 'library-dues', 'graduation'],
         aiSummary: 'Central register of accounts, library and hostel sign-offs ensuring eligibility of student 181-15-2015 for Convocation issuance.',
         fileVersion: 1,
-        qrData: 'diu-archive://category/Clearance Files',
+        qrData: 'https://archive.diu.edu.bd/category/clearance-files?id=cat-reg-4',
         storageHash: '7a12bcde0ef45b911ee67a8ccd810a9fdeba40',
         hardCopyDetails: {
           cabinetNumber: 'CAB-B',
@@ -396,18 +495,73 @@ export default function App() {
     }
   }, [currentUser, activeTab, showProfileModal]);
 
+  const [hasParsedRoute, setHasParsedRoute] = useState(false);
+
   // Login Callback success
   const handleLoginSuccess = (token: string, user: any) => {
     safeStorage.setItem('diu_auth_token', token);
     setAuthToken(token);
     setCurrentUser(user);
-    if (user.role !== 'Super Admin') {
-      setSelectedDeptId(user.departmentId);
-      const firstCat = categories.find(c => c.departmentId === user.departmentId);
-      if (firstCat) setSelectedCategoryValue(firstCat.name);
+    if (redirectedScan) {
+      setSelectedDeptId(redirectedScan.departmentId);
+      setSelectedCategoryValue(redirectedScan.name);
+      setActiveTab('explorer');
+      notifyUser(`Success! Loading destination scanned folder: "${redirectedScan.name}"`, 'success');
+      setRedirectedScan(null);
+    } else {
+      if (user.role !== 'Super Admin') {
+        setSelectedDeptId(user.departmentId);
+        const firstCat = categories.find(c => c.departmentId === user.departmentId);
+        if (firstCat) setSelectedCategoryValue(firstCat.name);
+      }
+      setActiveTab('dashboard');
     }
-    setActiveTab('dashboard');
   };
+
+  // URL Query Parameters or Dynamic Route Matching
+  useEffect(() => {
+    const handleUrlRouting = async () => {
+      if (hasParsedRoute) return;
+      
+      const params = new URLSearchParams(window.location.search);
+      const catId = params.get('category') || params.get('id');
+      const pathname = window.location.pathname;
+
+      let lookupIdOrSlug = catId || '';
+      
+      if (!lookupIdOrSlug) {
+        const catMatch = pathname.match(/\/category\/([^/]+)/);
+        const folderMatch = pathname.match(/\/folder\/[^/]+\/([^/]+)/);
+        if (catMatch) lookupIdOrSlug = catMatch[1];
+        else if (folderMatch) lookupIdOrSlug = folderMatch[1];
+      }
+
+      if (lookupIdOrSlug) {
+        const cleanedLookup = lookupIdOrSlug.trim().toLowerCase();
+        const foundCat = categories.find(c => 
+          c.id.toLowerCase() === cleanedLookup || 
+          c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') === cleanedLookup
+        );
+
+        if (foundCat) {
+          setHasParsedRoute(true);
+          if (!currentUser) {
+            setRedirectedScan(foundCat);
+            notifyUser(`Please authenticate to access secured category folder: "${foundCat.name}"`, 'info');
+          } else {
+            setSelectedDeptId(foundCat.departmentId);
+            setSelectedCategoryValue(foundCat.name);
+            setActiveTab('explorer');
+            notifyUser(`QR scanned category verified and loaded: ${foundCat.name}`, 'success');
+          }
+        }
+      }
+    };
+    
+    if (!authLoading) {
+      handleUrlRouting();
+    }
+  }, [authLoading, currentUser, hasParsedRoute, categories]);
 
   // Perform Log Out
   const handleLogout = async () => {
@@ -584,7 +738,7 @@ export default function App() {
         tags: data.tags || ['scanned', 'ocr', 'ai-analyzed'],
         aiSummary: data.aiSummary || 'Analyzed DIU file classification complete.',
         fileVersion: 1,
-        qrData: `diu-archive://category/${data.category || selectedCategorValue}`,
+        qrData: getCategoryQRUrl(categories.find(c => c.name === (data.category || selectedCategorValue)) || { id: 'cat-fallback', name: (data.category || selectedCategorValue), departmentId: selectedDeptId }),
         storageHash: Math.random().toString(16).substring(2, 42),
         hardCopyDetails: {
           cabinetNumber: data.hardCopyDetails?.cabinetNumber || customCabinet,
@@ -666,7 +820,7 @@ export default function App() {
           tags: data.tags || ['bulk', 'ocr-indexing'],
           aiSummary: data.aiSummary,
           fileVersion: 1,
-          qrData: `diu-archive://category/${data.category || selectedCategorValue}`,
+          qrData: getCategoryQRUrl(categories.find(c => c.name === (data.category || selectedCategorValue)) || { id: 'cat-fallback', name: (data.category || selectedCategorValue), departmentId: selectedDeptId }),
           storageHash: Math.random().toString(16).substring(2, 42),
           hardCopyDetails: {
             cabinetNumber: data.hardCopyDetails?.cabinetNumber || 'CAB-H',
@@ -1451,33 +1605,55 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {categories.filter(c => currentUser.role === 'Super Admin' || c.departmentId === currentUser.departmentId).map(cat => (
-                  <div 
-                    key={cat.id}
-                    className={`p-3 border rounded-xl flex flex-col items-center justify-between text-center gap-2.5 hover:shadow-md transition-all ${
-                      theme === 'dark' ? 'bg-slate-950/40 border-slate-850' : 'bg-slate-50 border-slate-100'
-                    }`}
-                  >
-                    <QRCodeView value={`diu-archive://category/${cat.name}`} size={105} />
-                    
-                    <div>
-                      <h4 className="font-extrabold text-[11px] truncate max-w-[120px]" title={cat.name}>
-                        {cat.name}
-                      </h4>
-                      <p className="text-[9px] text-indigo-400 font-bold uppercase mt-0.5">{cat.departmentId}</p>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        notifyUser(`Printing QR envelope badge layout for category folder: ${cat.name}`, 'success');
-                        window.print();
-                      }}
-                      className="text-[9px] bg-slate-100 dark:bg-slate-800 hover:opacity-95 text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-800 font-semibold cursor-pointer select-none"
+                {categories.filter(c => currentUser.role === 'Super Admin' || c.departmentId === currentUser.departmentId).map(cat => {
+                  const qrUrl = getCategoryQRUrl({ id: cat.id, name: cat.name, departmentId: cat.departmentId });
+                  return (
+                    <div 
+                      key={cat.id}
+                      className={`p-3 border rounded-xl flex flex-col items-center justify-between text-center gap-2.5 hover:shadow-md transition-all ${
+                        theme === 'dark' ? 'bg-slate-950/40 border-slate-850' : 'bg-slate-50 border-slate-100'
+                      }`}
                     >
-                      Print Envelope Key
-                    </button>
-                  </div>
-                ))}
+                      <QRCodeView value={qrUrl} size={105} />
+                      
+                      <div>
+                        <h4 className="font-extrabold text-[11px] truncate max-w-[120px]" title={cat.name}>
+                          {cat.name}
+                        </h4>
+                        <p className="text-[9px] text-indigo-400 font-bold uppercase mt-0.5">{cat.departmentId}</p>
+                        
+                        {/* Interactive testing URL anchor */}
+                        <a 
+                          href={qrUrl}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            // Trigger router path directly!
+                            window.history.pushState({}, '', qrUrl);
+                            // Fire a popstate or call state updates directly
+                            setSelectedDeptId(cat.departmentId);
+                            setSelectedCategoryValue(cat.name);
+                            setActiveTab('explorer');
+                            notifyUser(`Successfully loaded scanned QR category: ${cat.name}`, 'success');
+                          }}
+                          className="text-[9px] text-emerald-500 hover:underline block font-mono mt-1.5 break-all max-w-[120px]"
+                          title="Click to simulate QR Scanner web redirection"
+                        >
+                          Scan & View Link
+                        </a>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          notifyUser(`Printing QR envelope badge layout for category folder: ${cat.name}`, 'success');
+                          window.print();
+                        }}
+                        className="text-[9px] bg-slate-100 dark:bg-slate-800 hover:opacity-95 text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-800 font-semibold cursor-pointer select-none"
+                      >
+                        Print Envelope Key
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

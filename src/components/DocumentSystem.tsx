@@ -59,6 +59,13 @@ function QRCodeView({ value, size = 130 }: { value: string; size?: number }) {
   );
 }
 
+export function getCategoryQRUrlLocal(catName: string, catList: any[]) {
+  const cat = catList?.find(c => c.name.toLowerCase() === catName.toLowerCase()) || { id: 'SAL-001', name: catName, departmentId: 'hr' };
+  const slug = catName.toLowerCase().replace(/[^a-z0-str0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://archive.diu.edu.bd';
+  return `${origin}/category/${slug}?id=${cat.id}`;
+}
+
 interface DocumentSystemProps {
   files: UniversityFile[];
   setFiles: React.Dispatch<React.SetStateAction<UniversityFile[]>>;
@@ -361,7 +368,7 @@ export function DocumentSystem({
             tags: item.tags,
             aiSummary: `Batch scanned copy of physical folder record. Assigned to physical Cabinet ${cabCode}, Shelf ${shelfCode}.`,
             fileVersion: 1,
-            qrData: `diu-archive://category/${selectedCategorValue}`,
+            qrData: getCategoryQRUrlLocal(selectedCategorValue, categories),
             storageHash: Math.random().toString(16).substring(2, 42),
             hardCopyDetails: {
               cabinetNumber: `CAB-${cabCode}`,
@@ -451,7 +458,7 @@ export function DocumentSystem({
       tags: formTags ? formTags.split(',').map(t => t.trim()).filter(Boolean) : ['scanned', 'soft-copy'],
       aiSummary: formDesc || `Scanned soft copy of physical document records managed under folder: ${selectedCategorValue}.`,
       fileVersion: 1,
-      qrData: `diu-archive://category/${selectedCategorValue}`,
+      qrData: getCategoryQRUrlLocal(selectedCategorValue, categories),
       storageHash: Math.random().toString(16).substring(2, 42),
       hardCopyDetails: {
         cabinetNumber: formCabinet,
@@ -634,10 +641,24 @@ export function DocumentSystem({
 
   // Open visitor portal simulation
   const handleSimulateQrScan = (catName: string) => {
-    setPublicHubCategory(catName);
-    setShowQrPublicHub(true);
-    addLog('QR_CODE_SCANNED', `Accessed public folder cabinet through simulated camera barcode match: ${catName}`);
-    notifyUser(`QR code read success! Accessing category Cabinet Portal.`, 'success');
+    const matchedCat = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+    if (matchedCat) {
+      const slug = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const simulatedUrl = `/category/${slug}?id=${matchedCat.id}`;
+      
+      // Update browser pushState to make it feel like a real native URL redirect!
+      window.history.pushState({}, '', simulatedUrl);
+      
+      setSelectedDeptId(matchedCat.departmentId);
+      setSelectedCategoryValue(matchedCat.name);
+      addLog('QR_CODE_SCANNED', `Accessed category folder cabinet through simulated QR Scanner matching: ${catName}`);
+      notifyUser(`QR code read success! Redirecting dynamically to verified cabinet folder.`, 'success');
+    } else {
+      setPublicHubCategory(catName);
+      setShowQrPublicHub(true);
+      addLog('QR_CODE_SCANNED', `Accessed public folder cabinet through simulated camera barcode match: ${catName}`);
+      notifyUser(`QR code read success! Accessing category Cabinet Portal.`, 'success');
+    }
   };
 
   const activeCategoryObject = categories.find(c => c.name === selectedCategorValue);
@@ -764,7 +785,21 @@ export function DocumentSystem({
               </p>
               
               <div className="flex justify-center select-all cursor-pointer" onClick={() => handleSimulateQrScan(selectedCategorValue)} title="Click to Simulate Scan">
-                <QRCodeView value={`diu-archive://category/${selectedCategorValue}`} size={110} />
+                <QRCodeView value={getCategoryQRUrlLocal(selectedCategorValue, categories)} size={110} />
+              </div>
+
+              <div className="text-center">
+                <a 
+                  href={getCategoryQRUrlLocal(selectedCategorValue, categories)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleSimulateQrScan(selectedCategorValue);
+                  }}
+                  className="text-[9px] text-[#4f46e5] dark:text-[#a5b4fc] hover:underline font-mono truncate max-w-[170px] inline-block"
+                  title="Click to simulate camera QR scan"
+                >
+                  Simulate QR Scanner Link
+                </a>
               </div>
 
               <button
