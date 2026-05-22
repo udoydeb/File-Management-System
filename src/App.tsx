@@ -117,6 +117,15 @@ export default function App() {
     return (safeStorage.getItem('diu_theme') as 'light' | 'dark') || 'light';
   });
 
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
+
   // App tabs: 'dashboard' | 'explorer' | 'search' | 'movement' | 'qr-depot' | 'logs' | 'employee-mgmt'
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   
@@ -872,7 +881,7 @@ export default function App() {
   const checkedOutCount = files.filter(f => f.status === 'Out').length;
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col antialiased transition-colors duration-300`}>
+    <div className={`min-h-screen ${theme} ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col antialiased transition-colors duration-300`}>
       
       {/* Upper DIU branded header banner */}
       <header className={`border-b ${theme === 'dark' ? 'bg-slate-900 border-sky-950/30' : 'bg-slate-900 border-slate-200'} text-white relative overflow-hidden shrink-0`}>

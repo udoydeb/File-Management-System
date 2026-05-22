@@ -287,7 +287,7 @@ export function ProfileModal({
                       placeholder="e.g. Associate Assistant Officer"
                       value={designation}
                       onChange={(e) => setDesignation(e.target.value)}
-                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg focus:border-emerald-500 outline-none"
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:border-emerald-500 outline-none"
                     />
                   </div>
 
@@ -299,7 +299,7 @@ export function ProfileModal({
                       placeholder="+8801--------"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg focus:border-emerald-500 outline-none"
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:border-emerald-500 outline-none"
                     />
                   </div>
                 </div>
@@ -314,7 +314,7 @@ export function ProfileModal({
                         src={p}
                         onClick={() => setProfilePhoto(p)}
                         alt={`Preset ${idx}`}
-                        className={`w-9 h-9 rounded-xl cursor-pointer hover:scale-105 transition-all outline-indigo-505 object-cover border-2 shadow-xs ${
+                        className={`w-9 h-9 rounded-xl cursor-pointer hover:scale-105 transition-all outline-indigo-500 object-cover border-2 shadow-xs ${
                           profilePhoto === p ? 'border-emerald-500 ring-2 ring-emerald-500/10' : 'border-transparent'
                         }`}
                       />
@@ -330,7 +330,7 @@ export function ProfileModal({
                     placeholder="Enter custom image address link"
                     value={profilePhoto}
                     onChange={(e) => setProfilePhoto(e.target.value)}
-                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg Outline-none text-slate-400"
+                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none text-slate-400"
                   />
                 </div>
 
@@ -355,7 +355,7 @@ export function ProfileModal({
                     placeholder="••••••••"
                     value={oldPassword}
                     onChange={(e) => setOldPassword(e.target.value)}
-                    className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 dark:bg-slate-955 border border-slate-250 dark:border-slate-800 rounded-lg outline-none font-mono"
+                    className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg outline-none font-mono"
                   />
                 </div>
 
@@ -367,7 +367,7 @@ export function ProfileModal({
                     placeholder="••••••••"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 dark:bg-slate-955 border border-slate-250 dark:border-slate-800 rounded-lg outline-none font-mono"
+                    className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg outline-none font-mono"
                   />
                 </div>
 
@@ -379,7 +379,7 @@ export function ProfileModal({
                     placeholder="••••••••"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 dark:bg-slate-955 border border-slate-250 dark:border-slate-800 rounded-lg outline-none font-mono"
+                    className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg outline-none font-mono"
                   />
                 </div>
 
