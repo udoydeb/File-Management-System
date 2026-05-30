@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
 import {
   Folder,
   UploadCloud,
@@ -158,6 +159,12 @@ export default function App() {
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
   const [showAddCatModal, setShowAddCatModal] = useState(false);
+
+  // Bulk QR Print States
+  const [pdfGridLayout, setPdfGridLayout] = useState<'compact' | 'medium' | 'large' | 'sticker'>('medium');
+  const [pdfDesignTheme, setPdfDesignTheme] = useState<'classic' | 'minimalist' | 'detailed'>('classic');
+  const [pdfScope, setPdfScope] = useState<'mine' | 'all'>('all');
+  const [printingPdf, setPrintingPdf] = useState(false);
 
   // University files database
   const [files, setFiles] = useState<UniversityFile[]>(() => {
@@ -575,6 +582,277 @@ export default function App() {
     setAuthToken(null);
     setCurrentUser(null);
     notifyUser('Secure session terminated successfully.', 'info');
+  };
+
+  const handleBulkPrintPDF = async () => {
+    if (printingPdf) return;
+    setPrintingPdf(true);
+    notifyUser('Generating high-resolution QR sheet PDF...', 'info');
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Filter active categories to print
+      const printTargets = categories.filter(c => {
+        if (pdfScope === 'mine' && currentUser?.role !== 'Super Admin') {
+          return c.departmentId === currentUser?.departmentId;
+        }
+        return true;
+      });
+
+      if (printTargets.length === 0) {
+        notifyUser('No category active QR codes found matching the filter.', 'error');
+        setPrintingPdf(false);
+        return;
+      }
+
+      // Grid mathematics parameters
+      let cols = 2;
+      let rows = 3;
+      let badgeWidth = 85;
+      let badgeHeight = 80;
+      let gapX = 14;
+      let gapY = 14;
+
+      if (pdfGridLayout === 'compact') {
+        cols = 3;
+        rows = 4;
+        badgeWidth = 54;
+        badgeHeight = 58;
+        gapX = 10;
+        gapY = 10;
+      } else if (pdfGridLayout === 'large') {
+        cols = 2;
+        rows = 2;
+        badgeWidth = 86;
+        badgeHeight = 114;
+        gapX = 12;
+        gapY = 12;
+      } else if (pdfGridLayout === 'sticker') {
+        cols = 1;
+        rows = 1;
+        badgeWidth = 140;
+        badgeHeight = 160;
+        gapX = 0;
+        gapY = 0;
+      }
+
+      // Page Margins
+      const marginX = (210 - (cols * badgeWidth + (cols - 1) * gapX)) / 2;
+      const marginY = (297 - (rows * badgeHeight + (rows - 1) * gapY)) / 2;
+
+      for (let i = 0; i < printTargets.length; i++) {
+        const cat = printTargets[i];
+        
+        // If we filled the previous page, create a new one
+        if (i > 0 && i % (cols * rows) === 0) {
+          doc.addPage();
+        }
+
+        const pageItemIdx = i % (cols * rows);
+        const colIdx = pageItemIdx % cols;
+        const rowIdx = Math.floor(pageItemIdx / cols);
+
+        // Calculate card coordinates (x, y)
+        const x = marginX + colIdx * (badgeWidth + gapX);
+        const y = marginY + rowIdx * (badgeHeight + gapY);
+
+        // --- DRAW CARD CONTAINER ---
+        // Fill white background
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(x, y, badgeWidth, badgeHeight, 3, 3, 'F');
+
+        // Draw shadow/subtle border
+        doc.setDrawColor(218, 224, 233); // Slate border
+        doc.setLineWidth(0.3);
+        doc.roundedRect(x, y, badgeWidth, badgeHeight, 3, 3, 'S');
+
+        // Draw colored top stripe for department
+        let deptColor = [71, 85, 105]; // Default Slate #475569
+        if (cat.departmentId === 'registrar') deptColor = [5, 150, 105];    // Emerald #059669
+        else if (cat.departmentId === 'accounts') deptColor = [217, 119, 6]; // Amber #d97706
+        else if (cat.departmentId === 'hr') deptColor = [225, 29, 72];       // Rose #e11d48
+        else if (cat.departmentId === 'admission') deptColor = [79, 70, 229]; // Indigo #4f46e5
+        else if (cat.departmentId === 'exam') deptColor = [147, 51, 234];    // Purple #9333ea
+        else if (cat.departmentId === 'cse') deptColor = [8, 145, 178];      // Cyan #0891b2
+        else if (cat.departmentId === 'eee') deptColor = [20, 184, 166];     // Teal #14b8a6
+
+        doc.setFillColor(deptColor[0], deptColor[1], deptColor[2]);
+        // Top banner header inside card
+        const headerBarHeight = pdfGridLayout === 'compact' ? 5 : (pdfGridLayout === 'sticker' ? 12 : 8);
+        doc.roundedRect(x, y, badgeWidth, headerBarHeight, 3, 3, 'F');
+        // Paint over bottom corners of the header to keep top round but bottom sharp
+        doc.rect(x, y + headerBarHeight - 1, badgeWidth, 1.2, 'F');
+
+        // Header Title Text
+        doc.setTextColor(255, 255, 255);
+        if (pdfGridLayout === 'compact') {
+          doc.setFontSize(6);
+          doc.setFont('helvetica', 'bold');
+          doc.text('DIU ARCHIVE INDEX BADGE', x + badgeWidth / 2, y + 3.5, { align: 'center' });
+        } else if (pdfGridLayout === 'sticker') {
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('DAFFODIL INTERNATIONAL UNIVERSITY SECURITY BADGE', x + badgeWidth / 2, y + 7.5, { align: 'center' });
+        } else {
+          doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'bold');
+          doc.text('DIU UNIVERSITY CENTRAL ARCHIVE', x + badgeWidth / 2, y + 5.2, { align: 'center' });
+        }
+
+        // --- GENERATE AND ADD QR CODE ---
+        const qrUrl = getCategoryQRUrl({ id: cat.id, name: cat.name, departmentId: cat.departmentId });
+        const qrSize = pdfGridLayout === 'compact' ? 24 : (pdfGridLayout === 'sticker' ? 62 : 36);
+        const qrDataUrl = await QRCode.toDataURL(qrUrl, { margin: 1, width: 250 });
+
+        const qrX = x + (badgeWidth - qrSize) / 2;
+        // Y positioning for QR
+        const qrY = y + headerBarHeight + (pdfGridLayout === 'compact' ? 2 : (pdfGridLayout === 'sticker' ? 8 : 4));
+        doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+        // --- DETAILS METADATA ---
+        doc.setTextColor(30, 41, 59); // Dark blue gray
+
+        if (pdfGridLayout === 'compact') {
+          // Compact Category Title
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7);
+          doc.text(cat.name, x + badgeWidth / 2, qrY + qrSize + 3.5, { align: 'center', maxWidth: badgeWidth - 4 });
+
+          // Compact Department Label
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(5);
+          doc.setTextColor(deptColor[0], deptColor[1], deptColor[2]);
+          doc.text(`DEPOT: ${cat.departmentId.toUpperCase()}`, x + badgeWidth / 2, qrY + qrSize + 6.2, { align: 'center' });
+
+          // Micro coordinate details
+          doc.setTextColor(100, 116, 139);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(4.5);
+          doc.text(`ID: ${cat.id.toUpperCase()}`, x + badgeWidth / 2, qrY + qrSize + 8.5, { align: 'center' });
+          
+          doc.setFontSize(4);
+          doc.text('SCAN TO INSPECT RECORDS', x + badgeWidth / 2, y + badgeHeight - 2.2, { align: 'center' });
+        } else if (pdfGridLayout === 'sticker') {
+          // Ultra-large stickers (single layout page)
+          // Category Title
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(18);
+          doc.text(cat.name, x + badgeWidth / 2, qrY + qrSize + 11, { align: 'center' });
+
+          // Department Descriptor
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(deptColor[0], deptColor[1], deptColor[2]);
+          doc.text(`DEPARTMENT SECURED REPOSITORY: ${cat.departmentId.toUpperCase()}`, x + badgeWidth / 2, qrY + qrSize + 17, { align: 'center' });
+
+          // Description
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.setTextColor(100, 116, 139);
+          doc.text(cat.desc || 'Central files repository and digitization index.', x + badgeWidth / 2, qrY + qrSize + 22.5, { align: 'center', maxWidth: badgeWidth - 20 });
+
+          // Coordinate slots
+          doc.setDrawColor(226, 232, 240);
+          doc.setFillColor(248, 250, 252);
+          const boxY = qrY + qrSize + 28;
+          doc.roundedRect(x + 15, boxY, badgeWidth - 30, 25, 2, 2, 'FD');
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.setTextColor(100, 116, 139);
+          doc.text('PHYSICAL CABINET COORDINATES:', x + 20, boxY + 5.5);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.text(`CABINET REF:  [ ....................... ]`, x + 20, boxY + 12);
+          doc.text(`SHELF NO:     [ ....................... ]`, x + 20, boxY + 17);
+          doc.text(`BOX SERIAL:   [ ....................... ]`, x + 20, boxY + 22);
+
+          // Anchor scan instructions URL
+          const linkY = boxY + 31;
+          doc.setTextColor(99, 102, 241);
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(7.5);
+          doc.text(qrUrl, x + badgeWidth / 2, linkY, { align: 'center', maxWidth: badgeWidth - 10 });
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7);
+          doc.setTextColor(148, 163, 184);
+          doc.text('ADHESIVE SECURITY BARCODE KEY - FOR OFFICE USE ONLY', x + badgeWidth / 2, y + badgeHeight - 5, { align: 'center' });
+        } else {
+          // Medium & Large (Standard) Cards
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(pdfGridLayout === 'large' ? 12 : 9.5);
+          doc.text(cat.name, x + badgeWidth / 2, qrY + qrSize + (pdfGridLayout === 'large' ? 6 : 5.5), { align: 'center', maxWidth: badgeWidth - 6 });
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(pdfGridLayout === 'large' ? 8 : 6.5);
+          doc.setTextColor(deptColor[0], deptColor[1], deptColor[2]);
+          doc.text(`OFFICE: ${cat.departmentId.toUpperCase()}`, x + badgeWidth / 2, qrY + qrSize + (pdfGridLayout === 'large' ? 11 : 9.5), { align: 'center' });
+
+          doc.setTextColor(100, 116, 139);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(pdfGridLayout === 'large' ? 7 : 6);
+          doc.text(`Security Node: ${cat.id.toUpperCase()}`, x + badgeWidth / 2, qrY + qrSize + (pdfGridLayout === 'large' ? 15.5 : 13.5), { align: 'center' });
+
+          if (pdfDesignTheme === 'detailed' || pdfGridLayout === 'large') {
+            // Draw a neat bounding box for physical coordinate markings representatively
+            const boxY = qrY + qrSize + (pdfGridLayout === 'large' ? 20 : 17);
+            const boxW = badgeWidth - 14;
+            const boxH = pdfGridLayout === 'large' ? 20 : 14;
+            doc.setDrawColor(226, 232, 240);
+            doc.setFillColor(248, 250, 252);
+            doc.roundedRect(x + 7, boxY, boxW, boxH, 1.5, 1.5, 'FD');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(pdfGridLayout === 'large' ? 6.5 : 5);
+            doc.setTextColor(115, 115, 115);
+            doc.text('COORDINATES CONTROL MATRIX', x + 10, boxY + (pdfGridLayout === 'large' ? 4 : 3));
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(pdfGridLayout === 'large' ? 6 : 4.5);
+            doc.text(`Cabinet:   [...................]   Shelf: [.........]`, x + 10, boxY + (pdfGridLayout === 'large' ? 9 : 7));
+            doc.text(`File Box:  [...................]   Serial: [........]`, x + 10, boxY + (pdfGridLayout === 'large' ? 14 : 11));
+          } else {
+            // Minimalist / Standard small info
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(pdfGridLayout === 'large' ? 7.5 : 6);
+            doc.setTextColor(148, 163, 184);
+            doc.text(cat.desc || 'Central centralized files vault indexing.', x + badgeWidth / 2, qrY + qrSize + (pdfGridLayout === 'large' ? 22 : 19.5), { align: 'center', maxWidth: badgeWidth - 12 });
+          }
+
+          // Scan prompt text at bottom limit of badge
+          const linkY = y + badgeHeight - (pdfGridLayout === 'large' ? 8 : 5.5);
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(pdfGridLayout === 'large' ? 6.5 : 5);
+          doc.setTextColor(99, 102, 241); // Indigo
+          doc.text(qrUrl, x + badgeWidth / 2, linkY, { align: 'center', maxWidth: badgeWidth - 6 });
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(pdfGridLayout === 'large' ? 6 : 4.8);
+          doc.setTextColor(156, 163, 175);
+          doc.text('SCAN SECURE EMBEDDED QR DIGITIZATION KEY', x + badgeWidth / 2, y + badgeHeight - (pdfGridLayout === 'large' ? 3.2 : 2.2), { align: 'center' });
+        }
+      }
+
+      // Save output
+      doc.save(`DIU_Central_Archive_QR_Badges_${pdfGridLayout}.pdf`);
+      notifyUser('Successfully downloaded central category QR prints PDF sheet!', 'success');
+      
+      // Log event
+      addLog('EXPORT_QR_SHEETS_PDF', `Exported all category badges as a multi-page PDF sheet with grid layout: ${pdfGridLayout}`);
+
+    } catch (err: any) {
+      console.error(err);
+      notifyUser(`Export failed: ${err.message || err}`, 'error');
+    } finally {
+      setPrintingPdf(false);
+    }
   };
 
   // Administrative actions
@@ -1594,14 +1872,149 @@ export default function App() {
           {/* VIEW 5: SECURITY QR CODE BINDINGS DEPOT (QR-DEPOT) */}
           {activeTab === 'qr-depot' && (
             <div className={`border rounded-2xl p-6 shadow-sm text-left ${theme === 'dark' ? 'bg-slate-900 border-slate-850' : 'bg-white border-slate-200/80'} space-y-6 animate-fadeIn`}>
-              <div>
-                <h3 className="text-base font-bold flex items-center gap-1.5">
-                  <QrCode className="w-5 h-5 text-emerald-500" />
-                  <span>Interactive High-Resolution QR depot</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Bind these QR codes directly with physical archive folders and locker drawers. Scanning redirects instantly to the document portfolio directory.
-                </p>
+              {/* Header with quick stats */}
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h3 className="text-base font-bold flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+                    <QrCode className="w-5 h-5 text-emerald-500" />
+                    <span>Interactive High-Resolution QR depot</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                    Bind these QR codes directly with physical archive folders and locker drawers. Scanning redirects instantly to the document portfolio directory.
+                  </p>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-slate-500 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl border border-slate-200/40 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Total Badges: <strong>{categories.length} Nodes</strong></span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-700">|</span>
+                  <span>Scans Redirection: <strong>Direct Cabinets Binding</strong></span>
+                </div>
+              </div>
+
+              {/* Programmatic Bulk PDF Export and Configuration Studio Panel */}
+              <div className="bg-slate-50 dark:bg-slate-950/60 p-4 border border-slate-150 dark:border-slate-850 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-200/40 dark:border-slate-800/85 pb-3">
+                  <Printer className="w-4.5 h-4.5 text-indigo-500 animate-pulse" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">
+                    Bulk QR Badges Print Export Studio
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-end">
+                  {/* Select Scope */}
+                  <div className="md:col-span-3 space-y-1.5 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                      1. Cabinet Select Scope
+                    </label>
+                    <div className="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                      <button
+                        onClick={() => setPdfScope('all')}
+                        className={`py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                          pdfScope === 'all'
+                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs'
+                            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        All Categories
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (currentUser?.role !== 'Super Admin' && !currentUser?.departmentId) {
+                            notifyUser('Please login to filter by department', 'info');
+                            return;
+                          }
+                          setPdfScope('mine');
+                        }}
+                        className={`py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                          pdfScope === 'mine'
+                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs'
+                            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                        }`}
+                        title={currentUser?.role !== 'Super Admin' ? `Limit to ${currentUser?.departmentId?.toUpperCase()} category folders` : 'Filter my department'}
+                      >
+                        My Dept Only
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Grid Layouts Selector */}
+                  <div className="md:col-span-4 space-y-1.5 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                      2. Print Grid Layout Sheet
+                    </label>
+                    <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                      {(['compact', 'medium', 'large', 'sticker'] as const).map((gStyle) => (
+                        <button
+                          key={gStyle}
+                          onClick={() => setPdfGridLayout(gStyle)}
+                          className={`py-1 text-[9px] font-extrabold rounded-lg transition-all ${
+                            pdfGridLayout === gStyle
+                              ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs'
+                              : 'text-slate-400 hover:text-slate-605'
+                          }`}
+                        >
+                          {gStyle === 'compact' && '12/Page'}
+                          {gStyle === 'medium' && '6/Page'}
+                          {gStyle === 'large' && '4/Page'}
+                          {gStyle === 'sticker' && '1/Page'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Theme Selector */}
+                  <div className="md:col-span-3 space-y-1.5 text-left">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                      3. Graphic Theme Style
+                    </label>
+                    <div className="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                      <button
+                        onClick={() => setPdfDesignTheme('classic')}
+                        className={`py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                          pdfDesignTheme === 'classic'
+                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs'
+                            : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        Classic Card
+                      </button>
+                      <button
+                        onClick={() => setPdfDesignTheme('detailed')}
+                        className={`py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                          pdfDesignTheme === 'detailed'
+                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs'
+                            : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        Detailed Grid
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Primary Trigger Export Button */}
+                  <div className="md:col-span-2 text-left">
+                    <button
+                      onClick={handleBulkPrintPDF}
+                      disabled={printingPdf}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white font-extrabold text-[11px] rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-500/10 min-h-[34px]"
+                    >
+                      {printingPdf ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Bulk Export PDF</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
