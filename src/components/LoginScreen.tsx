@@ -617,8 +617,6 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
                 <div className="p-8">
                   <AnimatePresence mode="wait">
-                    
-                    {/* VIEW A: LOGIN SECURE */}
                     {activeTab === 'login' && (
                       <motion.form
                         key="login"
@@ -735,7 +733,6 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
                       </motion.form>
                     )}
 
-                    {/* VIEW B: SIGNUP SYSTEM */}
                     {activeTab === 'signup' && (
                       <motion.form
                         key="signup"
@@ -930,7 +927,6 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
                       </motion.form>
                     )}
 
-                    {/* VIEW C: FORGOT CREDENTIALS */}
                     {activeTab === 'forgot' && (
                       <motion.div
                         key="forgot"
