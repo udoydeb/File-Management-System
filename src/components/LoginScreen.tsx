@@ -149,7 +149,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
         console.warn('Supabase Auth connection error:', err);
       }
 
-      // 2. Fetch/match profile from Supabase 'profiles' table to check status/role
+      // 2. Fetch/match profile from Supabase 'profiles' or fallback 'users' table
       let supabaseProfile: any = null;
       try {
         const { data: profile } = await supabase
@@ -159,9 +159,54 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
           .maybeSingle();
         if (profile) {
           supabaseProfile = profile;
+        } else {
+          // Fallback to checking the users table in case of custom schema setups
+          const { data: uProfile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', authenticatedEmail.toLowerCase().trim())
+            .maybeSingle();
+          if (uProfile) {
+            supabaseProfile = uProfile;
+          }
         }
       } catch (err) {
-        console.warn('Could not query profiles table, falling back:', err);
+        console.warn('Could not query profiles table, trying users table fallback:', err);
+        try {
+          const { data: uProfile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', authenticatedEmail.toLowerCase().trim())
+            .maybeSingle();
+          if (uProfile) {
+            supabaseProfile = uProfile;
+          }
+        } catch (e2) {
+          console.warn('Could not query users table fallback either:', e2);
+        }
+      }
+
+      if (supabaseProfile) {
+        console.log('[DEBUG LOGIN] Supabase Profile Retrieved:', supabaseProfile);
+        // Normalize any snake_case Postgres DB schemas into React standard camelCase properties
+        if (supabaseProfile.full_name && !supabaseProfile.fullName) {
+          supabaseProfile.fullName = supabaseProfile.full_name;
+        }
+        if (supabaseProfile.employee_id && !supabaseProfile.employeeId) {
+          supabaseProfile.employeeId = supabaseProfile.employee_id;
+        }
+        if (supabaseProfile.department_id && !supabaseProfile.departmentId) {
+          supabaseProfile.departmentId = supabaseProfile.department_id;
+        }
+        if (supabaseProfile.profile_photo && !supabaseProfile.profilePhoto) {
+          supabaseProfile.profilePhoto = supabaseProfile.profile_photo;
+        }
+        if (supabaseProfile.email_verified && !supabaseProfile.emailVerified) {
+          supabaseProfile.emailVerified = supabaseProfile.email_verified;
+        }
+        if (supabaseProfile.created_at && !supabaseProfile.createdAt) {
+          supabaseProfile.createdAt = supabaseProfile.created_at;
+        }
       }
 
       // 3. Keep backend session synchronized
@@ -251,17 +296,33 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
     }
 
     setLoading(true);
+    console.log('[DEBUG SIGNUP] Initiating employee signup request:', { fullName, employeeId, email: emailLower, departmentId, designation, phone });
+
     try {
-      // 1. Supabase Auth Client Action
+      // 1. Supabase Auth Client Action with rich metadata options
       let supabaseUid = '';
       try {
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: emailLower,
           password: password,
+          options: {
+            data: {
+              fullName: fullName.trim(),
+              full_name: fullName.trim(),
+              employeeId: employeeId.trim().toUpperCase(),
+              employee_id: employeeId.trim().toUpperCase(),
+              departmentId: departmentId,
+              department_id: departmentId,
+              designation: designation.trim(),
+              phone: phone ? phone.trim() : '',
+              role: 'Viewer',
+              status: 'Pending'
+            }
+          }
         });
         
         if (authError) {
-          console.warn('Supabase auth signUp error:', authError.message);
+          console.warn('[DEBUG SIGNUP] Supabase auth signUp error:', authError.message);
           // Only block registration if it is a user-correctable constraint like weak password
           const isUserCorrectable = authError.message.toLowerCase().includes('password') ||
                                     authError.message.toLowerCase().includes('already holds') ||
@@ -273,44 +334,67 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
           } else {
             console.warn('Sandbox or configuration block from Supabase auth. Proceeding with central backend database match.');
           }
-        }
-        if (authData?.user) {
+        } else if (authData?.user) {
           supabaseUid = authData.user.id;
+          console.log('[DEBUG SIGNUP] Supabase Auth Response Successful:', { user: authData.user, session: authData.session });
         }
       } catch (err: any) {
-        console.warn('Supabase auth signup exception:', err);
+        console.warn('[DEBUG SIGNUP] Supabase auth signup exception caught:', err);
       }
 
-      // 2. Insert/Sync to Supabase 'profiles' database table
+      // 2. Insert/Sync to Supabase unified Profiles and Users database tables
+      const id = supabaseUid || `usr-${Math.random().toString(36).substr(2, 9)}`;
       const profileData = {
-        id: supabaseUid || `usr-${Math.random().toString(36).substr(2, 9)}`,
+        id,
         fullName: fullName.trim(),
+        full_name: fullName.trim(),
         employeeId: employeeId.trim().toUpperCase(),
+        employee_id: employeeId.trim().toUpperCase(),
         departmentId: departmentId,
+        department_id: departmentId,
         designation: designation.trim(),
         email: emailLower,
         phone: phone ? phone.trim() : '',
         role: 'Viewer',
         status: 'Pending',
         profilePhoto: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+        profile_photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
         emailVerified: false,
-        createdAt: new Date().toISOString()
+        email_verified: false,
+        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString()
       };
 
+      console.log('[DEBUG SIGNUP] Attempting Supabase Profiles table insertion:', profileData);
       try {
         const { error: dbErr } = await supabase
           .from('profiles')
           .upsert([profileData]);
         if (dbErr) {
-          console.warn('Could not upsert profile in Supabase table:', dbErr.message);
+          console.warn('[DEBUG SIGNUP] Could not upsert in Supabase profiles table:', dbErr.message);
         } else {
-          console.log('Successfully upserted user registration into profiles table!');
+          console.log('[DEBUG SIGNUP] Successfully upserted user registration into profiles table!');
         }
       } catch (err) {
-        console.warn('Failed to interact with profiles table:', err);
+        console.warn('[DEBUG SIGNUP] Exception in profiles table upsert:', err);
+      }
+
+      console.log('[DEBUG SIGNUP] Attempting Supabase Users table insertion (fallback schema tracking):', profileData);
+      try {
+        const { error: dbErr } = await supabase
+          .from('users')
+          .upsert([profileData]);
+        if (dbErr) {
+          console.warn('[DEBUG SIGNUP] Could not upsert in Supabase users table:', dbErr.message);
+        } else {
+          console.log('[DEBUG SIGNUP] Successfully upserted user registration into users table!');
+        }
+      } catch (err) {
+        console.warn('[DEBUG SIGNUP] Exception in users table upsert:', err);
       }
 
       // 3. Match and sync on Express backend database
+      console.log('[DEBUG SIGNUP] Syncing to Express local persistence database...', { emailLower, id });
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -326,16 +410,19 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       });
       const data = await res.json();
       if (res.ok) {
+        console.log('[DEBUG SIGNUP] Express registry sync approved:', data);
         setPendingUserRecord(profileData);
         setIsVerifyingEmail(true);
         // Simulate a real SMS/Email OTP code
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         setSimulatedCode(code);
-        notifyUser('Simulated Email Verification Dispatched', 'success');
+        notifyUser('Registration submitted successfully. Awaiting admin approval.', 'success');
       } else {
-        notifyUser(data.error || 'Registration failed.', 'error');
+        console.warn('[DEBUG SIGNUP] Express register negative response:', data.error);
+        notifyUser(data.error || 'This email or employee ID is already registered.', 'error');
       }
     } catch (err) {
+      console.error('[DEBUG SIGNUP] Unknown fatal exception during signup workflow:', err);
       notifyUser('Backend server failed during transaction registration.', 'error');
     } finally {
       setLoading(false);
@@ -617,390 +704,383 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
                 <div className="p-8">
                   <AnimatePresence mode="wait">
-                    {activeTab === 'login' && (
-                      <motion.form
-                        key="login"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        onSubmit={handleLoginSubmit}
-                        className="space-y-5 text-left"
-                      >
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Office Email or Employee ID</label>
-                          <div className="relative">
-                            <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                            <input
-                              type="text"
-                              required
-                              placeholder="e.g. admin@daffodilvarsity.edu.bd"
-                              value={loginId}
-                              onChange={(e) => setLoginId(e.target.value)}
-                              className={iconInputStyle}
-                            />
+                    <motion.div
+                      key={activeTab}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      className="w-full"
+                    >
+                      {activeTab === 'login' && (
+                        <form
+                          onSubmit={handleLoginSubmit}
+                          className="space-y-5 text-left"
+                        >
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Office Email or Employee ID</label>
+                            <div className="relative">
+                              <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. admin@daffodilvarsity.edu.bd"
+                                value={loginId}
+                                onChange={(e) => setLoginId(e.target.value)}
+                                className={iconInputStyle}
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <label className="text-xs font-bold text-slate-705 dark:text-slate-300 uppercase tracking-widest block">Secret Password</label>
-                            <button 
-                              type="button"
-                              onClick={() => setActiveTab('forgot')}
-                              className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
-                            >
-                              Forgot Password?
-                            </button>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <label className="text-xs font-bold text-slate-705 dark:text-slate-300 uppercase tracking-widest block">Secret Password</label>
+                              <button 
+                                type="button"
+                                onClick={() => setActiveTab('forgot')}
+                                className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
+                              >
+                                Forgot Password?
+                              </button>
+                            </div>
+                            
+                            <div className="relative">
+                              <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-405 dark:text-slate-500" />
+                              <input
+                                type={showPassword ? 'text' : 'password'}
+                                required
+                                placeholder="••••••••"
+                                value={loginPass}
+                                onChange={(e) => setLoginPass(e.target.value)}
+                                className={iconInputStyle + " font-mono tracking-widest"}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-3.5 text-slate-405 hover:text-slate-650 dark:text-slate-500 dark:hover:text-slate-350"
+                              >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </div>
-                          
-                          <div className="relative">
-                            <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-405 dark:text-slate-500" />
-                            <input
-                              type={showPassword ? 'text' : 'password'}
-                              required
-                              placeholder="••••••••"
-                              value={loginPass}
-                              onChange={(e) => setLoginPass(e.target.value)}
-                              className={iconInputStyle + " font-mono tracking-widest"}
-                            />
+
+                          {/* Remember Me slider */}
+                          <div className="flex items-center justify-between py-1 select-none">
+                            <label className="flex items-center gap-2.5 cursor-pointer font-bold text-xs text-slate-600 dark:text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={rememberMe}
+                                onChange={() => setRememberMe(!rememberMe)}
+                                className="rounded border-slate-300 dark:border-slate-800 text-emerald-600 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5"
+                              />
+                              <span>Remember my login node session</span>
+                            </label>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 disabled:opacity-50 disabled:pointer-events-none text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/10 cursor-pointer flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
+                          >
+                            {loading ? 'Validating credentials...' : 'Authenticate Credentials'}
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+
+                          {/* DIU Enterprise SSO simulation section */}
+                          <div className="relative py-4 select-none">
+                            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-800" /></div>
+                            <div className="relative flex justify-center text-[10px]"><span className="bg-white dark:bg-[#111827] px-3.5 text-slate-400 dark:text-slate-550 font-extrabold uppercase tracking-widest">Or login with university SSO</span></div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
                             <button
                               type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-4 top-3.5 text-slate-405 hover:text-slate-650 dark:text-slate-500 dark:hover:text-slate-350"
+                              onClick={() => handleSSOLogin('google')}
+                              className="py-3 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-250 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-2.5 transition-colors shadow-sm"
                             >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                              </svg>
+                              <span>Google Office</span>
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={() => handleSSOLogin('microsoft')}
+                              className="py-3 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-250 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                            >
+                              <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23">
+                                <path fill="#f35325" d="M0 0h10.5v10.5H0z" />
+                                <path fill="#81bc06" d="M11.5 0H22v10.5H11.5z" />
+                                <path fill="#05a6f0" d="M0 11.5h10.5V22H0z" />
+                                <path fill="#ffba08" d="M11.5 11.5H22V22H11.5z" />
+                              </svg>
+                              <span>Azure AD SSO</span>
                             </button>
                           </div>
-                        </div>
+                        </form>
+                      )}
 
-                        {/* Remember Me slider */}
-                        <div className="flex items-center justify-between py-1 select-none">
-                          <label className="flex items-center gap-2.5 cursor-pointer font-bold text-xs text-slate-600 dark:text-slate-300">
-                            <input
-                              type="checkbox"
-                              checked={rememberMe}
-                              onChange={() => setRememberMe(!rememberMe)}
-                              className="rounded border-slate-300 dark:border-slate-800 text-emerald-600 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5"
-                            />
-                            <span>Remember my login node session</span>
-                          </label>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 disabled:opacity-50 disabled:pointer-events-none text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/10 cursor-pointer flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
+                      {activeTab === 'signup' && (
+                        <form
+                          onSubmit={signupSubmitHook => {
+                            signupSubmitHook.preventDefault();
+                            handleSignupSubmit(signupSubmitHook);
+                          }}
+                          className="space-y-4 text-left"
                         >
-                          {loading ? 'Validating credentials...' : 'Authenticate Credentials'}
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
-
-                        {/* DIU Enterprise SSO simulation section */}
-                        <div className="relative py-4 select-none">
-                          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-800" /></div>
-                          <div className="relative flex justify-center text-[10px]"><span className="bg-white dark:bg-[#111827] px-3.5 text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-widest">Or login with university SSO</span></div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <button
-                            type="button"
-                            onClick={() => handleSSOLogin('google')}
-                            className="py-3 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-250 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-2.5 transition-colors shadow-sm"
-                          >
-                            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                            </svg>
-                            <span>Google Office</span>
-                          </button>
-                          
-                          <button
-                            type="button"
-                            onClick={() => handleSSOLogin('microsoft')}
-                            className="py-3 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-250 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-2.5 transition-colors shadow-sm"
-                          >
-                            <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23">
-                              <path fill="#f35325" d="M0 0h10.5v10.5H0z" />
-                              <path fill="#81bc06" d="M11.5 0H22v10.5H11.5z" />
-                              <path fill="#05a6f0" d="M0 11.5h10.5V22H0z" />
-                              <path fill="#ffba08" d="M11.5 11.5H22V22H11.5z" />
-                            </svg>
-                            <span>Azure AD SSO</span>
-                          </button>
-                        </div>
-                      </motion.form>
-                    )}
-
-                    {activeTab === 'signup' && (
-                      <motion.form
-                        key="signup"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        onSubmit={signupSubmitHook => {
-                          signupSubmitHook.preventDefault();
-                          handleSignupSubmit(signupSubmitHook);
-                        }}
-                        className="space-y-4 text-left"
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Full Employ Name</label>
-                            <div className="relative">
-                              <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="text"
-                                required
-                                placeholder="e.g. Dr. Imran Mahmud"
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Unique Employee ID</label>
-                            <div className="relative">
-                              <FolderKey className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="text"
-                                required
-                                placeholder="e.g. DIU-EMP-5020"
-                                value={employeeId}
-                                onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-mono"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Affiliated Department</label>
-                            <div className="relative">
-                              <Building className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <select
-                                value={departmentId}
-                                onChange={(e) => setDepartmentId(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 focus:bg-white focus:border-emerald-500 outline-none"
-                              >
-                                {DEPARTMENTS.map(dept => (
-                                  <option key={dept.id} value={dept.id}>{dept.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Official Designation</label>
-                            <div className="relative">
-                              <Briefcase className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="text"
-                                required
-                                placeholder="e.g. Associate Professor"
-                                value={designation}
-                                onChange={(e) => setDesignation(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Email Address (Personal or University)</label>
-                            <div className="relative">
-                              <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="email"
-                                required
-                                placeholder="name@domain.com or name@diu.edu.bd"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Phone Number (Required)</label>
-                            <div className="relative">
-                              <Phone className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="text"
-                                required
-                                placeholder="+8801--------"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Create Password</label>
-                            <div className="relative">
-                              <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="password"
-                                required
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-mono"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Confirm Password</label>
-                            <div className="relative">
-                              <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                              <input
-                                type="password"
-                                required
-                                placeholder="••••••••"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-mono"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Interactive Password Strength Metrics widget */}
-                        {password.length > 0 && (
-                          <div className="p-4 bg-slate-100/30 dark:bg-slate-950/40 rounded-xl border border-slate-250 dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-300 space-y-2.5 font-semibold">
-                            <p className="font-extrabold uppercase tracking-widest text-[9px] text-slate-400 dark:text-slate-550 flex justify-between">
-                              <span>Password Security Rating</span>
-                              <span className={strengthCount >= 4 ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-amber-600 dark:text-amber-400 font-extrabold'}>
-                                {strengthCount <= 2 ? 'Weak Profile' : strengthCount === 3 ? 'Medium Quality' : 'Excellent State'}
-                              </span>
-                            </p>
-                            
-                            <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden flex gap-1">
-                              <div className={`h-full flex-1 ${strengthCount >= 1 ? 'bg-rose-500' : 'bg-transparent'}`} />
-                              <div className={`h-full flex-1 ${strengthCount >= 2 ? 'bg-rose-500' : 'bg-transparent'}`} />
-                              <div className={`h-full flex-1 ${strengthCount >= 3 ? 'bg-amber-500' : 'bg-transparent'}`} />
-                              <div className={`h-full flex-1 ${strengthCount >= 4 ? 'bg-emerald-500' : 'bg-transparent'}`} />
-                              <div className={`h-full flex-1 ${strengthCount >= 5 ? 'bg-teal-400' : 'bg-transparent'}`} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 dark:text-slate-400 font-medium">
-                              <p className="flex items-center gap-1.5">
-                                <span className={pwdMetrics.length ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
-                                8+ characters length
-                              </p>
-                              <p className="flex items-center gap-1.5">
-                                <span className={pwdMetrics.upper ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
-                                Uppercase A-Z letter
-                              </p>
-                              <p className="flex items-center gap-1.5">
-                                <span className={pwdMetrics.lower ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
-                                Lowercase a-z letter
-                              </p>
-                              <p className="flex items-center gap-1.5">
-                                <span className={pwdMetrics.number ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
-                                Numeric symbol 0-9
-                              </p>
-                              <p className="flex items-center gap-1.5 col-span-2">
-                                <span className={pwdMetrics.special ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
-                                Special symbol (@$!%*?&)
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-750 hover:from-emerald-500 hover:to-teal-650 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2"
-                        >
-                          {loading ? 'Initializing Registration records...' : 'Register as Employee'}
-                        </button>
-                      </motion.form>
-                    )}
-
-                    {activeTab === 'forgot' && (
-                      <motion.div
-                        key="forgot"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="space-y-5 text-left"
-                      >
-                        {!showResetForm ? (
-                          <form onSubmit={handleForgotPasswordRequest} className="space-y-4">
-                            <div className="space-y-2">
-                              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Office Email Address or Employee ID</label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Full Employ Name</label>
                               <div className="relative">
-                                <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                                <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                                 <input
                                   type="text"
                                   required
-                                  placeholder="e.g. admin@daffodilvarsity.edu.bd"
-                                  value={forgotInput}
-                                  onChange={(e) => setForgotInput(e.target.value)}
-                                  className={iconInputStyle}
+                                  placeholder="e.g. Dr. Imran Mahmud"
+                                  value={fullName}
+                                  onChange={(e) => setFullName(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
                                 />
                               </div>
                             </div>
 
-                            <button
-                              type="submit"
-                              disabled={loading}
-                              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-750 hover:from-emerald-500 hover:to-teal-650 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md cursor-pointer flex items-center justify-center gap-2 transition-transform transform hover:-translate-y-0.5"
-                            >
-                              {loading ? 'Routing recovery mail dockets...' : 'Request Password Recovery'}
-                            </button>
-                          </form>
-                        ) : (
-                          
-                          /* Reset Password Input replacement Screen */
-                          <form onSubmit={handleResetSubmit} className="space-y-4">
-                            <div className="p-4 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15 rounded-2xl text-xs space-y-1.5 font-medium leading-relaxed">
-                              <p className="font-extrabold flex items-center gap-2 text-sm">
-                                <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                                <span>Simulated Recovery Link Verified!</span>
-                              </p>
-                              <p className="opacity-95 font-mono text-[11px]">
-                                Simulated Reset token: <span className="font-bold underline text-emerald-700 dark:text-emerald-300">{simulatedResetToken}</span>
-                              </p>
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Unique Employee ID</label>
+                              <div className="relative">
+                                <FolderKey className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. DIU-EMP-5020"
+                                  value={employeeId}
+                                  onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-mono"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Affiliated Department</label>
+                              <div className="relative">
+                                <Building className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                                <select
+                                  value={departmentId}
+                                  onChange={(e) => setDepartmentId(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-705 dark:text-slate-300 focus:bg-white focus:border-emerald-500 outline-none"
+                                >
+                                  {DEPARTMENTS.map(dept => (
+                                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
 
-                            <div className="space-y-2">
-                              <label className="text-xs font-bold text-slate-705 dark:text-slate-300 uppercase tracking-widest block">Specify Replacement Password</label>
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Official Designation</label>
                               <div className="relative">
-                                <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                                <Briefcase className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. Associate Professor"
+                                  value={designation}
+                                  onChange={(e) => setDesignation(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Email Address (Personal or University)</label>
+                              <div className="relative">
+                                <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="email"
+                                  required
+                                  placeholder="name@domain.com or name@diu.edu.bd"
+                                  value={email}
+                                  onChange={(e) => setEmail(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Phone Number (Required)</label>
+                              <div className="relative">
+                                <Phone className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="+8801--------"
+                                  value={phone}
+                                  onChange={(e) => setPhone(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Create Password</label>
+                              <div className="relative">
+                                <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                                 <input
                                   type="password"
                                   required
-                                  placeholder="Enter strong new password"
-                                  value={newPasswordValue}
-                                  onChange={(e) => setNewPasswordValue(e.target.value)}
-                                  className={iconInputStyle + " font-mono tracking-widest"}
+                                  placeholder="••••••••"
+                                  value={password}
+                                  onChange={(e) => setPassword(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-mono"
                                 />
                               </div>
                             </div>
 
-                            <button
-                              type="submit"
-                              disabled={loading}
-                              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs cursor-pointer uppercase tracking-wider transition-colors"
-                            >
-                              Commit Replacement Password
-                            </button>
-                          </form>
-                        )}
-                      </motion.div>
-                    )}
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Confirm Password</label>
+                              <div className="relative">
+                                <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="password"
+                                  required
+                                  placeholder="••••••••"
+                                  value={confirmPassword}
+                                  onChange={(e) => setConfirmPassword(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-mono"
+                                />
+                              </div>
+                            </div>
+                          </div>
 
+                          {/* Interactive Password Strength Metrics widget */}
+                          {password.length > 0 && (
+                            <div className="p-4 bg-slate-100/30 dark:bg-slate-950/40 rounded-xl border border-slate-250 dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-300 space-y-2.5 font-semibold">
+                              <p className="font-extrabold uppercase tracking-widest text-[9px] text-slate-400 dark:text-slate-550 flex justify-between">
+                                <span>Password Security Rating</span>
+                                <span className={strengthCount >= 4 ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-amber-600 dark:text-amber-400 font-extrabold'}>
+                                  {strengthCount <= 2 ? 'Weak Profile' : strengthCount === 3 ? 'Medium Quality' : 'Excellent State'}
+                                </span>
+                              </p>
+                              
+                              <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden flex gap-1">
+                                <div className={`h-full flex-1 ${strengthCount >= 1 ? 'bg-rose-500' : 'bg-transparent'}`} />
+                                <div className={`h-full flex-1 ${strengthCount >= 2 ? 'bg-rose-500' : 'bg-transparent'}`} />
+                                <div className={`h-full flex-1 ${strengthCount >= 3 ? 'bg-amber-500' : 'bg-transparent'}`} />
+                                <div className={`h-full flex-1 ${strengthCount >= 4 ? 'bg-emerald-500' : 'bg-transparent'}`} />
+                                <div className={`h-full flex-1 ${strengthCount >= 5 ? 'bg-teal-400' : 'bg-transparent'}`} />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 dark:text-slate-400 font-medium">
+                                <p className="flex items-center gap-1.5">
+                                  <span className={pwdMetrics.length ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
+                                  8+ characters length
+                                </p>
+                                <p className="flex items-center gap-1.5">
+                                  <span className={pwdMetrics.upper ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
+                                  Uppercase A-Z letter
+                                </p>
+                                <p className="flex items-center gap-1.5">
+                                  <span className={pwdMetrics.lower ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
+                                  Lowercase a-z letter
+                                </p>
+                                <p className="flex items-center gap-1.5">
+                                  <span className={pwdMetrics.number ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
+                                  Numeric symbol 0-9
+                                </p>
+                                <p className="flex items-center gap-1.5 col-span-2">
+                                  <span className={pwdMetrics.special ? 'text-emerald-600 dark:text-emerald-450 font-black' : 'text-slate-300 dark:text-slate-700'}>✓</span>
+                                  Special symbol (@$!%*?&)
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-750 hover:from-emerald-500 hover:to-teal-650 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            {loading ? 'Initializing Registration records...' : 'Register as Employee'}
+                          </button>
+                        </form>
+                      )}
+
+                      {activeTab === 'forgot' && (
+                        <div className="space-y-5 text-left">
+                          {!showResetForm ? (
+                            <form onSubmit={handleForgotPasswordRequest} className="space-y-4">
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Office Email Address or Employee ID</label>
+                                <div className="relative">
+                                  <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g. admin@daffodilvarsity.edu.bd"
+                                    value={forgotInput}
+                                    onChange={(e) => setForgotInput(e.target.value)}
+                                    className={iconInputStyle}
+                                  />
+                                </div>
+                              </div>
+
+                              <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-750 hover:from-emerald-500 hover:to-teal-650 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md cursor-pointer flex items-center justify-center gap-2 transition-transform transform hover:-translate-y-0.5"
+                              >
+                                {loading ? 'Routing recovery mail dockets...' : 'Request Password Recovery'}
+                              </button>
+                            </form>
+                          ) : (
+                            /* Reset Password Input replacement Screen */
+                            <form onSubmit={handleResetSubmit} className="space-y-4">
+                              <div className="p-4 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15 rounded-2xl text-xs space-y-1.5 font-medium leading-relaxed">
+                                <p className="font-extrabold flex items-center gap-2 text-sm">
+                                  <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Simulated Recovery Link Verified!</span>
+                                </p>
+                                <p className="opacity-95 font-mono text-[11px]">
+                                  Simulated Reset token: <span className="font-bold underline text-emerald-700 dark:text-emerald-300">{simulatedResetToken}</span>
+                                </p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-755 dark:text-slate-300 uppercase tracking-widest block">Specify Replacement Password</label>
+                                <div className="relative">
+                                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-405 dark:text-slate-500" />
+                                  <input
+                                    type="password"
+                                    required
+                                    placeholder="Enter strong new password"
+                                    value={newPasswordValue}
+                                    onChange={(e) => setNewPasswordValue(e.target.value)}
+                                    className={iconInputStyle + " font-mono tracking-widest"}
+                                  />
+                                </div>
+                              </div>
+
+                              <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs cursor-pointer uppercase tracking-wider transition-colors"
+                              >
+                                Commit Replacement Password
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
                   </AnimatePresence>
                 </div>
               </div>
