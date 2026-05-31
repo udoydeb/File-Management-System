@@ -4,6 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { handleAPIRoute } from './server_routes.js';
 import { pullFromSupabase, saveChanges } from './server_db.js';
+import { seed } from './seed.js';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 
@@ -41,15 +42,30 @@ async function startServer() {
   // Synchronise system state with Supabase cloud database on startup
   try {
     console.log('Initiating boot-time sync with Supabase cloud database...');
-    pullFromSupabase().then((cloudData) => {
+    pullFromSupabase().then(async (cloudData) => {
       if (cloudData) {
         saveChanges(cloudData);
         console.log('DIU system state synchronized successfully with Supabase Cloud!');
       } else {
         console.log('DIU system state running on local cache (Supabase database table is empty or does not exist yet).');
       }
-    }).catch((err: any) => {
+
+      // Automatically run robust seeding check
+      try {
+        console.log('Initiating background check & seed of 5 demo accounts...');
+        await seed();
+        console.log('Background accounts verification complete.');
+      } catch (seedErr: any) {
+        console.warn('Background accounts seed warning (non-fatal):', seedErr.message || seedErr);
+      }
+    }).catch(async (err: any) => {
       console.warn('Supabase initial fetch failed. Falling back to local database.', err.message);
+      // Run fallback seeding check
+      try {
+        await seed();
+      } catch (seedErr) {
+        console.warn('Seeding exception during initial fetch failure:', seedErr);
+      }
     });
   } catch (err) {
     console.error('Supabase boot-up controller encountered an exception:', err);
