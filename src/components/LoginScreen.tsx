@@ -225,10 +225,27 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       return;
     }
 
-    notifyUser('Email verified! Your profile has been queued for security administrator approval.', 'success');
-    setIsVerifyingEmail(false);
-    setActiveTab('login');
-    setVerificationInput('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/verify-registration-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        notifyUser('Your registration request has been submitted successfully and is awaiting central registry administration approval.', 'success');
+        setIsVerifyingEmail(false);
+        setActiveTab('login');
+        setVerificationInput('');
+      } else {
+        const data = await res.json();
+        notifyUser(data.error || 'Email verification failed on security check.', 'error');
+      }
+    } catch (err) {
+      notifyUser('Communication with verification service failed.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Forgot Password request token
@@ -335,8 +352,8 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
             <Info className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div className="text-xs space-y-1.5">
               <p className="font-bold text-slate-800 dark:text-slate-200">Security Gate Guard Active</p>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                Accounts signup is only valid for official university domains (<span className="text-emerald-750 dark:text-emerald-300 font-semibold font-mono">@daffodilvarsity.edu.bd</span>). New registration profiles require central registry administration clearance.
+              <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-semibold">
+                Users can register using both personal verified email addresses and official university email domains. All newly registered accounts require approval from the central registry administration before activation.
               </p>
             </div>
           </div>
@@ -398,7 +415,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">Step 2: Dual Verification Code Check</h3>
                   <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed max-w-md mx-auto">
-                    We just simulated delivering an activation token to your official Daffodil address <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{email}</span>.
+                    We just simulated delivering an activation token to your registered address <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{email}</span>.
                   </p>
                 </div>
 
@@ -673,13 +690,13 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Official Email Address</label>
+                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest block">Email Address (Personal or University)</label>
                             <div className="relative">
                               <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                               <input
                                 type="email"
                                 required
-                                placeholder="name.dept@daffodilvarsity.edu.bd"
+                                placeholder="name@domain.com or name@diu.edu.bd"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/85 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"

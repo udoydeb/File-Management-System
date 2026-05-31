@@ -288,13 +288,12 @@ export async function handleAPIRoute(req: any, res: any, next: () => void): Prom
         return true;
       }
 
-      // Email Domain validations: @daffodilvarsity.edu.bd, @diu.edu.bd and testing sandbox fallback @diu.edu
+      // Basic email validation check (accepting university or personal email addresses)
       const emailLower = email.toLowerCase().trim();
-      const allowedDomains = ['@daffodilvarsity.edu.bd', '@diu.edu.bd', '@daffodil.edu.bd', '@diu.edu'];
-      const hasAllowedDomain = allowedDomains.some(domain => emailLower.endsWith(domain));
-      if (!hasAllowedDomain) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailLower)) {
         sendJSON(res, 400, { 
-          error: 'Access Restricted: Signup is strictly permitted for official Daffodil International University email domains (@daffodilvarsity.edu.bd, @diu.edu.bd).' 
+          error: 'Access Restricted: Please enter a correct, syntactically valid verified personal or official email address.' 
         });
         return true;
       }
@@ -319,7 +318,7 @@ export async function handleAPIRoute(req: any, res: any, next: () => void): Prom
       // Unique Email check
       const existingEmail = db.users.find(u => u.email.toLowerCase() === emailLower);
       if (existingEmail) {
-        sendJSON(res, 400, { error: `Official email address "${emailLower}" is already registered.` });
+        sendJSON(res, 400, { error: `Email address "${emailLower}" is already registered.` });
         return true;
       }
 
@@ -358,7 +357,7 @@ export async function handleAPIRoute(req: any, res: any, next: () => void): Prom
 
       sendJSON(res, 201, {
         success: true,
-        message: 'Registration successful! An official verification email has been simulated. Your profile has been queued for Super/Department Admin security approval.',
+        message: 'Your registration request has been submitted successfully and is awaiting central registry administration approval.',
         userId: newUser.id,
         user: {
           fullName: newUser.fullName,
@@ -369,6 +368,30 @@ export async function handleAPIRoute(req: any, res: any, next: () => void): Prom
           emailVerified: newUser.emailVerified
         }
       });
+      return true;
+    }
+
+    // Public verification of email during registration flow
+    if (url === '/api/auth/verify-registration-email' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const { email } = body;
+      if (!email) {
+        sendJSON(res, 400, { error: 'Missing registration email identifier.' });
+        return true;
+      }
+      const emailLower = email.toLowerCase().trim();
+      const userInDb = db.users.find(u => u.email.toLowerCase() === emailLower);
+      if (userInDb) {
+        userInDb.emailVerified = true;
+        saveChanges(db);
+        recordAccessLog('EMAIL_VERIFIED', 'Verified registration email during signup workflow.', userInDb.email, 'Success', req);
+        sendJSON(res, 200, {
+          success: true,
+          message: 'Daffodil email validated successfully! Pending administrative approval.'
+        });
+      } else {
+        sendJSON(res, 404, { error: 'Account not found for verification.' });
+      }
       return true;
     }
 
