@@ -990,6 +990,129 @@ Return ONLY pure JSON.`;
       return true;
     }
 
+    // 17. Categories and Files REST Sync endpoints
+    if (url === '/api/categories' && req.method === 'GET') {
+      sendJSON(res, 200, { success: true, categories: db.categories });
+      return true;
+    }
+
+    if (url === '/api/categories' && req.method === 'POST') {
+      const activeUser = getAuthenticatedUser(req);
+      if (!activeUser || (activeUser.role !== 'Super Admin' && activeUser.role !== 'Department Admin')) {
+        sendJSON(res, 403, { error: 'Access Denied: Administrative privileges required to create category.' });
+        return true;
+      }
+
+      const body = await parseBody(req);
+      const { name, desc, departmentId, isPublic } = body;
+
+      if (!name || !departmentId) {
+        sendJSON(res, 400, { error: 'Category folder name and department ID are required.' });
+        return true;
+      }
+
+      const normalizedName = name.trim();
+      const slug = normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const catId = `cat-${departmentId}-${Date.now().toString().slice(-4)}`;
+
+      // Prevent duplicates
+      if (db.categories.some(c => c.name.toLowerCase() === normalizedName.toLowerCase() || c.slug === slug)) {
+        sendJSON(res, 400, { error: `Category folder "${normalizedName}" already exists on master index.` });
+        return true;
+      }
+
+      const origin = req.headers.origin || 'https://archive.diu.edu.bd';
+      const newCat = {
+        id: catId,
+        departmentId: departmentId,
+        name: normalizedName,
+        desc: desc ? desc.trim() : 'Dynamic DIU employee archive category',
+        slug,
+        isPublic: !!isPublic,
+        qr_url: `${origin}/category/${slug}?id=${catId}`
+      };
+
+      db.categories.push(newCat);
+      saveChanges(db);
+
+      recordAccessLog(
+        'CATEGORY_ADDED',
+        `Created category folder "${normalizedName}" linked with slug "${slug}". Public access: ${!!isPublic}`,
+        activeUser.email,
+        'Success',
+        req
+      );
+
+      sendJSON(res, 201, { success: true, category: newCat });
+      return true;
+    }
+
+    if (url === '/api/files' && req.method === 'GET') {
+      sendJSON(res, 200, { success: true, files: db.files });
+      return true;
+    }
+
+    if (url === '/api/files' && req.method === 'POST') {
+      const activeUser = getAuthenticatedUser(req);
+      if (!activeUser || activeUser.role === 'Viewer') {
+        sendJSON(res, 403, { error: 'Access Denied: You are not authorized to upload or edit files.' });
+        return true;
+      }
+
+      const body = await parseBody(req);
+      const fileObj = body;
+
+      if (!fileObj.id || !fileObj.name || !fileObj.category) {
+        sendJSON(res, 400, { error: 'Incomplete file metadata provided.' });
+        return true;
+      }
+
+      // Upsert: replace if exists, else prepend
+      db.files = db.files.filter(f => f.id !== fileObj.id);
+      db.files.unshift(fileObj);
+      saveChanges(db);
+
+      recordAccessLog(
+        'FILE_REGISTERED',
+        `Registered/updated document: "${fileObj.name}" inside category: "${fileObj.category}"`,
+        activeUser.email,
+        'Success',
+        req
+      );
+
+      sendJSON(res, 201, { success: true, file: fileObj });
+      return true;
+    }
+
+    if (url === '/api/files/delete' && req.method === 'POST') {
+      const activeUser = getAuthenticatedUser(req);
+      if (!activeUser || activeUser.role === 'Viewer') {
+        sendJSON(res, 403, { error: 'Access Denied: Viewers cannot delete files.' });
+        return true;
+      }
+
+      const body = await parseBody(req);
+      const { fileId } = body;
+      if (!fileId) {
+        sendJSON(res, 400, { error: 'File ID is required.' });
+        return true;
+      }
+
+      db.files = db.files.filter(f => f.id !== fileId);
+      saveChanges(db);
+
+      recordAccessLog(
+        'FILE_DELETED',
+        `Deleted archive file: "${fileId}" from the system datastore.`,
+        activeUser.email,
+        'Success',
+        req
+      );
+
+      sendJSON(res, 200, { success: true, message: 'File permanently deleted from servers.' });
+      return true;
+    }
+
     // 18. Category Files and QR Metadata Endpoint
     const actualPath = url.split('?')[0];
     const categoryFilesMatch = actualPath.match(/^\/api\/category\/([^/]+)\/files$/);

@@ -20,30 +20,30 @@ export const DEPARTMENTS = [
 
 export const INITIAL_CATEGORIES = [
   // Registrar
-  { id: 'cat-reg-1', departmentId: 'registrar', name: 'Student Records', desc: 'Main intake profiles and clearance registrations' },
-  { id: 'cat-reg-2', departmentId: 'registrar', name: 'Transcripts', desc: 'Offices CGPA transcript sheets of academic runs' },
-  { id: 'cat-reg-3', departmentId: 'registrar', name: 'Certificates', desc: 'Official graduation credentials and honors diplomas' },
-  { id: 'cat-reg-4', departmentId: 'registrar', name: 'Clearance Files', desc: 'Library dues and accounts graduation clearance logs' },
+  { id: 'cat-reg-1', departmentId: 'registrar', name: 'Student Records', desc: 'Main intake profiles and clearance registrations', isPublic: false },
+  { id: 'cat-reg-2', departmentId: 'registrar', name: 'Transcripts', desc: 'Offices CGPA transcript sheets of academic runs', isPublic: false },
+  { id: 'cat-reg-3', departmentId: 'registrar', name: 'Certificates', desc: 'Official graduation credentials and honors diplomas', isPublic: false },
+  { id: 'cat-reg-4', departmentId: 'registrar', name: 'Clearance Files', desc: 'Library dues and accounts graduation clearance logs', isPublic: false },
   
   // Accounts
-  { id: 'cat-acc-1', departmentId: 'accounts', name: 'Accounts Audits', desc: 'External accounting clearance receipts' },
-  { id: 'cat-acc-2', departmentId: 'accounts', name: 'Tuition Fee Logs', desc: 'Student enrollment payments and scholarship waivers' },
+  { id: 'cat-acc-1', departmentId: 'accounts', name: 'Accounts Audits', desc: 'External accounting clearance receipts', isPublic: false },
+  { id: 'cat-acc-2', departmentId: 'accounts', name: 'Tuition Fee Logs', desc: 'Student enrollment payments and scholarship waivers', isPublic: false },
 
   // HR
-  { id: 'cat-hr-1', departmentId: 'hr', name: 'Employee Records', desc: 'Lecturer contracts, identity verifications, portfolios' },
-  { id: 'cat-hr-2', departmentId: 'hr', name: 'Salary Files', desc: 'Faculty bonuses and payroll disbursements' },
-  { id: 'cat-hr-3', departmentId: 'hr', name: 'Leave Applications', desc: 'Maternity, medical and casual dynamic leave dockets' },
+  { id: 'cat-hr-1', departmentId: 'hr', name: 'Employee Records', desc: 'Lecturer contracts, identity verifications, portfolios', isPublic: false },
+  { id: 'cat-hr-2', departmentId: 'hr', name: 'Salary Files', desc: 'Faculty bonuses and payroll disbursements', isPublic: false },
+  { id: 'cat-hr-3', departmentId: 'hr', name: 'Leave Applications', desc: 'Maternity, medical and casual dynamic leave dockets', isPublic: false },
 
   // Admission
-  { id: 'cat-adm-1', departmentId: 'admission', name: 'Intake Applications', desc: 'New admissions registration dossiers' },
+  { id: 'cat-adm-1', departmentId: 'admission', name: 'Intake Applications', desc: 'New admissions registration dossiers', isPublic: false },
 
   // Exam Controller
-  { id: 'cat-ex-1', departmentId: 'exam', name: 'Exam Papers', desc: 'Final exams term questions and grade benchmarks' },
-  { id: 'cat-ex-2', departmentId: 'exam', name: 'Syllabus Documents', desc: 'DIU standardized academic course syllabi lists' },
+  { id: 'cat-ex-1', departmentId: 'exam', name: 'Exam Papers', desc: 'Final exams term questions and grade benchmarks', isPublic: false },
+  { id: 'cat-ex-2', departmentId: 'exam', name: 'Syllabus Documents', desc: 'DIU standardized academic course syllabi lists', isPublic: true },
 
   // CSE
-  { id: 'cat-cse-1', departmentId: 'cse', name: 'Research Publications', desc: 'CSE Faculty research journals, Springer contributions' },
-  { id: 'cat-cse-2', departmentId: 'cse', name: 'Thesis Records', desc: 'DIU Undergrad final year defense transcripts' }
+  { id: 'cat-cse-1', departmentId: 'cse', name: 'Research Publications', desc: 'CSE Faculty research journals, Springer contributions', isPublic: true },
+  { id: 'cat-cse-2', departmentId: 'cse', name: 'Thesis Records', desc: 'DIU Undergrad final year defense transcripts', isPublic: true }
 ];
 
 export const TEST_DOCUMENT_TEMPLATES = [

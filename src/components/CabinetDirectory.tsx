@@ -56,6 +56,7 @@ function QRCodeView({ value, size = 110, label = 'Security Node' }: { value: str
 }
 
 const STORAGE_KEY = 'diu_physical_cabinets';
+const SHELF_CAPACITY_LIMIT = 15;
 
 // Initial fallback database of Cabinets matched to seeded files
 const INITIAL_CABINETS: Cabinet[] = [
@@ -360,6 +361,9 @@ export function CabinetDirectory({
 
   // Search filter query inside a single cabinet dashboard
   const [innerFileQuery, setInnerFileQuery] = useState('');
+
+  // Sorting state for files inside active drawer
+  const [drawerFileSort, setDrawerFileSort] = useState<'name' | 'serial'>('name');
 
   // Manual box/shelf creation triggers
   const [showAddShelfInput, setShowAddShelfInput] = useState(false);
@@ -1225,6 +1229,7 @@ export function CabinetDirectory({
                     const nestedFilesCount = files.filter(
                       f => f.hardCopyDetails?.cabinetNumber === activeCabinet.code && f.hardCopyDetails?.shelfNumber === shelf.name
                     ).length;
+                    const capacityPercent = Math.min(100, Math.round((nestedFilesCount / SHELF_CAPACITY_LIMIT) * 100));
 
                     return (
                       <div 
@@ -1242,16 +1247,37 @@ export function CabinetDirectory({
                             // Auto select the first box
                             if (shelf.boxes.length > 0) setActiveBoxId(shelf.boxes[0].id);
                           }}
-                          className="p-3 flex items-center justify-between cursor-pointer select-none"
+                          className="p-3 flex items-center justify-between cursor-pointer select-none gap-4"
                         >
-                          <div className="flex items-center gap-2">
-                            <Layers className={`w-4 h-4 ${isShelfActive ? 'text-emerald-500' : 'text-slate-400'}`} />
-                            <span className={`text-xs font-bold ${isShelfActive ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500'}`}>
-                              {shelf.name}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Layers className={`w-4 h-4 shrink-0 ${isShelfActive ? 'text-emerald-500' : 'text-slate-400'}`} />
+                              <span className={`text-xs font-bold truncate ${isShelfActive ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500'}`}>
+                                {shelf.name}
+                              </span>
+                            </div>
+                            
+                            {/* Capacity progress bar */}
+                            <div className="mt-2 flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    capacityPercent >= 90 
+                                      ? 'bg-rose-500' 
+                                      : capacityPercent >= 75 
+                                        ? 'bg-amber-500' 
+                                        : 'bg-emerald-500'
+                                  }`}
+                                  style={{ width: `${capacityPercent}%` }}
+                                />
+                              </div>
+                              <span className="text-[8px] font-mono font-medium text-slate-400 dark:text-slate-500 shrink-0">
+                                {capacityPercent}% Capacity ({nestedFilesCount}/{SHELF_CAPACITY_LIMIT})
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                             <span className="px-1.5 text-[9px] font-mono bg-slate-200 dark:bg-slate-800 font-bold rounded">
                               {nestedFilesCount} copy{nestedFilesCount !== 1 ? 'ies' : ''}
                             </span>
@@ -1395,16 +1421,35 @@ export function CabinetDirectory({
                         )}
                       </div>
 
-                      {/* Search box filters query within files inside this cabinet */}
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="Search files inside crate..."
-                          value={innerFileQuery}
-                          onChange={(e) => setInnerFileQuery(e.target.value)}
-                          className="pl-7 pr-3 py-1.5 text-[10px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none text-slate-600 dark:text-slate-200 font-mono"
-                        />
+                      {/* Search & Sort Controls */}
+                      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                        {/* Search box filters query within files inside this cabinet */}
+                        <div className="relative flex-1 md:flex-none">
+                          <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Search files inside crate..."
+                            value={innerFileQuery}
+                            onChange={(e) => setInnerFileQuery(e.target.value)}
+                            className="pl-7 pr-3 py-1.5 text-[10px] w-full md:w-44 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none text-slate-600 dark:text-slate-200 font-mono"
+                          />
+                        </div>
+
+                        {/* File Sort Toggle */}
+                        {currentShelfObj && currentBoxObj && (
+                          <button
+                            onClick={() => {
+                              const nextOrder = drawerFileSort === 'name' ? 'serial' : 'name';
+                              setDrawerFileSort(nextOrder);
+                              notifyUser(`Sorted files inside drawer by: ${nextOrder === 'name' ? 'Alphabetical Order' : 'File Serial Number'}`, 'info');
+                            }}
+                            className="px-2.5 py-1.5 border border-slate-205 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-350 rounded-lg flex items-center gap-1.5 cursor-pointer select-none transition-all"
+                            title="Toggle between Alphabetical and Serial number sorting"
+                          >
+                            <ArrowUpDown className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>Sort: {drawerFileSort === 'name' ? 'A-Z Name' : 'Serial No.'}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1439,11 +1484,23 @@ export function CabinetDirectory({
                          (innerFileQuery === '' || f.name.toLowerCase().includes(innerFileQuery.toLowerCase()) || f.hardCopyDetails?.fileSerial.toLowerCase().includes(innerFileQuery.toLowerCase()))
                   );
 
+                  // Sort according to user preference (either alphabetical by name or by file serial number order)
+                  const sortedFilingList = [...matchedFilingList].sort((a, b) => {
+                    if (drawerFileSort === 'name') {
+                      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+                    } else if (drawerFileSort === 'serial') {
+                      const serialA = a.hardCopyDetails?.fileSerial || '';
+                      const serialB = b.hardCopyDetails?.fileSerial || '';
+                      return serialA.localeCompare(serialB, undefined, { numeric: true, sensitivity: 'base' });
+                    }
+                    return 0;
+                  });
+
                   return (
                     <div className="space-y-4">
                       
-                      {matchedFilingList.length > 0 ? (
-                        matchedFilingList.map(file => {
+                      {sortedFilingList.length > 0 ? (
+                        sortedFilingList.map(file => {
                           const isCheckout = file.status === 'Out';
                           const activeCheckout = checkouts.find(c => c.fileId === file.id && c.status === 'Taken');
 

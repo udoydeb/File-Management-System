@@ -68,6 +68,7 @@ import { AdminPanel } from './components/AdminPanel.js';
 import { ProfileModal } from './components/ProfileModal.js';
 import { DocumentSystem } from './components/DocumentSystem.js';
 import { CabinetDirectory } from './components/CabinetDirectory.js';
+import { ScannedFolderPortal } from './components/ScannedFolderPortal.js';
 
 // Safe sandbox-friendly localStorage helper
 const safeStorage = {
@@ -153,6 +154,12 @@ export default function App() {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('registrar');
   const [selectedCategorValue, setSelectedCategoryValue] = useState<string>('Student Records');
   const [redirectedScan, setRedirectedScan] = useState<any | null>(null);
+
+  // Dynamic scanned portal state properties
+  const [scannedPathCategory, setScannedPathCategory] = useState<any | null>(null);
+  const [scannedPathFiles, setScannedPathFiles] = useState<any[]>([]);
+  const [scannedPathLoading, setScannedPathLoading] = useState(false);
+  const [isScannedPathLocked, setIsScannedPathLocked] = useState(false);
   
   // Custom states databases
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
@@ -528,7 +535,7 @@ export default function App() {
   // URL Query Parameters or Dynamic Route Matching
   useEffect(() => {
     const handleUrlRouting = async () => {
-      if (hasParsedRoute) return;
+      if (scannedPathCategory) return;
       
       const params = new URLSearchParams(window.location.search);
       const catId = params.get('category') || params.get('id');
@@ -545,22 +552,52 @@ export default function App() {
 
       if (lookupIdOrSlug) {
         const cleanedLookup = lookupIdOrSlug.trim().toLowerCase();
-        const foundCat = categories.find(c => 
-          c.id.toLowerCase() === cleanedLookup || 
-          c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') === cleanedLookup
-        );
-
-        if (foundCat) {
-          setHasParsedRoute(true);
-          if (!currentUser) {
-            setRedirectedScan(foundCat);
-            notifyUser(`Please authenticate to access secured category folder: "${foundCat.name}"`, 'info');
-          } else {
-            setSelectedDeptId(foundCat.departmentId);
-            setSelectedCategoryValue(foundCat.name);
-            setActiveTab('explorer');
-            notifyUser(`QR scanned category verified and loaded: ${foundCat.name}`, 'success');
+        setScannedPathLoading(true);
+        try {
+          const res = await fetch(`/api/category/${cleanedLookup}/files`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.category) {
+              setHasParsedRoute(true);
+              setScannedPathCategory(data.category);
+              setScannedPathFiles(data.files || []);
+              
+              // Evaluate lock criteria based on domain rule properties
+              const isPub = data.category.isPublic;
+              if (!isPub && !currentUser) {
+                setIsScannedPathLocked(true);
+                setRedirectedScan(data.category);
+                notifyUser(`Secured folder: "${data.category.name}" requires Active Directory verification.`, 'info');
+              } else {
+                setIsScannedPathLocked(false);
+                notifyUser(`QR Scanned Category accessed directory: ${data.category.name}`, 'success');
+              }
+            }
           }
+        } catch (err) {
+          console.error("Path categories sync fault, doing client-side lookup:", err);
+          const foundCat = categories.find(c => 
+            c.id.toLowerCase() === cleanedLookup || 
+            c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') === cleanedLookup
+          );
+
+          if (foundCat) {
+            setHasParsedRoute(true);
+            setScannedPathCategory(foundCat);
+            const filteredLocalFiles = files.filter(f => f.category.toLowerCase() === foundCat.name.toLowerCase());
+            setScannedPathFiles(filteredLocalFiles);
+            
+            // Local lock defaults
+            const isPub = foundCat.isPublic;
+            if (!isPub && !currentUser) {
+              setIsScannedPathLocked(true);
+              setRedirectedScan(foundCat);
+            } else {
+              setIsScannedPathLocked(false);
+            }
+          }
+        } finally {
+          setScannedPathLoading(false);
         }
       }
     };
@@ -568,7 +605,35 @@ export default function App() {
     if (!authLoading) {
       handleUrlRouting();
     }
-  }, [authLoading, currentUser, hasParsedRoute, categories]);
+  }, [authLoading, currentUser, hasParsedRoute, categories, files]);
+
+  // Sync entire files dashboard on credentials change
+  useEffect(() => {
+    const fetchUniversityData = async () => {
+      try {
+        const catRes = await fetch('/api/categories');
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          if (catData.categories && catData.categories.length > 0) {
+            setCategories(catData.categories);
+          }
+        }
+        
+        const filesRes = await fetch('/api/files');
+        if (filesRes.ok) {
+          const filesData = await filesRes.json();
+          if (filesData.files && filesData.files.length > 0) {
+            setFiles(filesData.files);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync master files/categories from backend:', err);
+      }
+    };
+    if (!authLoading) {
+      fetchUniversityData();
+    }
+  }, [authLoading, currentUser]);
 
   // Perform Log Out
   const handleLogout = async () => {
@@ -900,7 +965,7 @@ export default function App() {
     }
   };
 
-  const handleAddCategorySubmit = (e: FormEvent) => {
+  const handleAddCategorySubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
     
@@ -910,19 +975,35 @@ export default function App() {
       return;
     }
 
-    const catId = `cat-${selectedDeptId}-${Date.now().toString().slice(-4)}`;
-    const newCat = {
-      id: catId,
-      departmentId: selectedDeptId,
-      name: newCatName.trim(),
-      desc: newCatDesc.trim() || 'Dynamic DIU employee archive category'
-    };
-    setCategories([...categories, newCat]);
-    setNewCatName('');
-    setNewCatDesc('');
-    setShowAddCatModal(false);
-    addLog('ADD_CATEGORY', `Created category "${newCat.name}" under ${DEPARTMENTS.find(d => d.id === selectedDeptId)?.name}`);
-    notifyUser(`Successfully added Category: ${newCat.name}`, 'success');
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: newCatName.trim(),
+          desc: newCatDesc.trim() || 'Dynamic DIU employee archive category',
+          departmentId: selectedDeptId,
+          isPublic: false
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setCategories(prev => [...prev, data.category]);
+        setNewCatName('');
+        setNewCatDesc('');
+        setShowAddCatModal(false);
+        addLog('ADD_CATEGORY', `Created category folder "${data.category.name}" on cloud database`);
+        notifyUser(`Successfully added Category: ${data.category.name}`, 'success');
+      } else {
+        notifyUser(data.error || 'Failed to sync category with Express databases.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      notifyUser('Server communication link timed out.', 'error');
+    }
   };
 
   // Single file scanned register UI States
@@ -1029,6 +1110,17 @@ export default function App() {
       };
 
       setFiles(prev => [nextFile, ...prev]);
+      
+      // Persist scan to Express DB asynchronously
+      fetch('/api/files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(nextFile)
+      }).catch(err => console.error('Database files upload synchronization fault:', err));
+
       addLog('DOCUMENT_UPLOAD_AI', `Uploaded & AI-analyzed: ${nextFile.name}`);
       triggerNotification('success', 'AI OCR Complete', `Classified: "${nextFile.name}" into "${nextFile.category}"`);
       notifyUser(`Success! Classified into folder: ${nextFile.category}`, 'success');
@@ -1111,6 +1203,17 @@ export default function App() {
         };
 
         setFiles(prev => [nextFile, ...prev]);
+        
+        // Push bulk scanning target to background server db
+        fetch('/api/files', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify(nextFile)
+        }).catch(err => console.error('Bulk records server database synchronization fault:', err));
+
         setBulkQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done', progress: 100, feedback: `Classified: ${nextFile.category}` } : f));
         addLog('BULK_AUTO_REGISTER', `Bulk Upload & OCR parsed: ${nextFile.name}`);
       }
@@ -1256,7 +1359,18 @@ export default function App() {
     };
 
     setCheckouts(prev => [freshCheckout, ...prev]);
-    setFiles(prev => prev.map(f => f.id === linkedFile.id ? { ...f, status: 'Out' } : f));
+    const updatedFile = { ...linkedFile, status: 'Out' as const };
+    setFiles(prev => prev.map(f => f.id === linkedFile.id ? updatedFile : f));
+
+    // Sync checkout state to Express DB
+    fetch('/api/files', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify(updatedFile)
+    }).catch(err => console.error('Checkout verification sync fault:', err));
     
     setBorrowerName('');
     setBorrowerId('');
@@ -1278,7 +1392,23 @@ export default function App() {
     if (!linkedChk) return;
 
     setCheckouts(prev => prev.map(c => c.id === chkId ? { ...c, returnedDate: new Date().toISOString().split('T')[0], status: 'Returned' } : c));
-    setFiles(prev => prev.map(f => f.id === linkedChk.fileId ? { ...f, status: 'Active' } : f));
+    const targetFile = files.find(f => f.id === linkedChk.fileId);
+    if (targetFile) {
+      const updatedFile = { ...targetFile, status: 'Active' as const };
+      setFiles(prev => prev.map(f => f.id === linkedChk.fileId ? updatedFile : f));
+      
+      // Update check-in state to Express db
+      fetch('/api/files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(updatedFile)
+      }).catch(err => console.error('Check-in status sync fault:', err));
+    } else {
+      setFiles(prev => prev.map(f => f.id === linkedChk.fileId ? { ...f, status: 'Active' } : f));
+    }
     
     addLog('FILE_RETURNED', `Physical file copy returned: ${linkedChk.fileName}`);
     notifyUser('File returned! Logged and cabinet allocation index re-secured.', 'success');
@@ -1291,6 +1421,28 @@ export default function App() {
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-xs font-mono text-slate-400">Verifying Daffodil Active Directory credentials...</p>
       </div>
+    );
+  }
+
+  // QR Scanned Portal rendering for guests/authenticated users if active
+  if (scannedPathCategory) {
+    return (
+      <ScannedFolderPortal 
+         category={scannedPathCategory}
+         files={scannedPathFiles}
+         onClose={() => setScannedPathCategory(null)}
+         currentUser={currentUser}
+         isLocked={isScannedPathLocked}
+         setIsLocked={setIsScannedPathLocked}
+         onLoginSuccess={(token, user) => {
+           handleLoginSuccess(token, user);
+           setIsScannedPathLocked(false);
+         }}
+         notifyUser={notifyUser}
+         theme={theme}
+         allCategories={categories}
+         setAllFiles={setFiles}
+      />
     );
   }
 

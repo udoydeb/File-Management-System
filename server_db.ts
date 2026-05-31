@@ -45,6 +45,7 @@ export interface Category {
   desc: string;
   slug: string;
   qr_url?: string;
+  isPublic?: boolean;
 }
 
 export interface UniversityFile {
@@ -187,20 +188,20 @@ function seedInitialData() {
 
 function seedCategories(): Category[] {
   const initial = [
-    { id: 'cat-reg-1', departmentId: 'registrar', name: 'Student Records', desc: 'Main intake profiles and clearance registrations' },
-    { id: 'cat-reg-2', departmentId: 'registrar', name: 'Transcripts', desc: 'Offices CGPA transcript sheets of academic runs' },
-    { id: 'cat-reg-3', departmentId: 'registrar', name: 'Certificates', desc: 'Official graduation credentials and honors diplomas' },
-    { id: 'cat-reg-4', departmentId: 'registrar', name: 'Clearance Files', desc: 'Library dues and accounts graduation clearance logs' },
-    { id: 'cat-acc-1', departmentId: 'accounts', name: 'Accounts Audits', desc: 'External accounting clearance receipts' },
-    { id: 'cat-acc-2', departmentId: 'accounts', name: 'Tuition Fee Logs', desc: 'Student enrollment payments and scholarship waivers' },
-    { id: 'cat-hr-1', departmentId: 'hr', name: 'Employee Records', desc: 'Lecturer contracts, identity verifications, portfolios' },
-    { id: 'cat-hr-2', departmentId: 'hr', name: 'Salary Files', desc: 'Faculty bonuses and payroll disbursements' },
-    { id: 'cat-hr-3', departmentId: 'hr', name: 'Leave Applications', desc: 'Maternity, medical and casual dynamic leave dockets' },
-    { id: 'cat-adm-1', departmentId: 'admission', name: 'Intake Applications', desc: 'New admissions registration dossiers' },
-    { id: 'cat-ex-1', departmentId: 'exam', name: 'Exam Papers', desc: 'Final exams term questions and grade benchmarks' },
-    { id: 'cat-ex-2', departmentId: 'exam', name: 'Syllabus Documents', desc: 'DIU standardized academic course syllabi lists' },
-    { id: 'cat-cse-1', departmentId: 'cse', name: 'Research Publications', desc: 'CSE Faculty research journals, Springer contributions' },
-    { id: 'cat-cse-2', departmentId: 'cse', name: 'Thesis Records', desc: 'DIU Undergrad final year defense transcripts' }
+    { id: 'cat-reg-1', departmentId: 'registrar', name: 'Student Records', desc: 'Main intake profiles and clearance registrations', isPublic: false },
+    { id: 'cat-reg-2', departmentId: 'registrar', name: 'Transcripts', desc: 'Offices CGPA transcript sheets of academic runs', isPublic: false },
+    { id: 'cat-reg-3', departmentId: 'registrar', name: 'Certificates', desc: 'Official graduation credentials and honors diplomas', isPublic: false },
+    { id: 'cat-reg-4', departmentId: 'registrar', name: 'Clearance Files', desc: 'Library dues and accounts graduation clearance logs', isPublic: false },
+    { id: 'cat-acc-1', departmentId: 'accounts', name: 'Accounts Audits', desc: 'External accounting clearance receipts', isPublic: false },
+    { id: 'cat-acc-2', departmentId: 'accounts', name: 'Tuition Fee Logs', desc: 'Student enrollment payments and scholarship waivers', isPublic: false },
+    { id: 'cat-hr-1', departmentId: 'hr', name: 'Employee Records', desc: 'Lecturer contracts, identity verifications, portfolios', isPublic: false },
+    { id: 'cat-hr-2', departmentId: 'hr', name: 'Salary Files', desc: 'Faculty bonuses and payroll disbursements', isPublic: false },
+    { id: 'cat-hr-3', departmentId: 'hr', name: 'Leave Applications', desc: 'Maternity, medical and casual dynamic leave dockets', isPublic: false },
+    { id: 'cat-adm-1', departmentId: 'admission', name: 'Intake Applications', desc: 'New admissions registration dossiers', isPublic: false },
+    { id: 'cat-ex-1', departmentId: 'exam', name: 'Exam Papers', desc: 'Final exams term questions and grade benchmarks', isPublic: false },
+    { id: 'cat-ex-2', departmentId: 'exam', name: 'Syllabus Documents', desc: 'DIU standardized academic course syllabi lists', isPublic: true },
+    { id: 'cat-cse-1', departmentId: 'cse', name: 'Research Publications', desc: 'CSE Faculty research journals, Springer contributions', isPublic: true },
+    { id: 'cat-cse-2', departmentId: 'cse', name: 'Thesis Records', desc: 'DIU Undergrad final year defense transcripts', isPublic: true }
   ];
 
   return initial.map(c => {
@@ -327,6 +328,16 @@ export function readDB(): DBStructure {
       if (data && Array.isArray(data.users)) {
         if (!data.categories || !Array.isArray(data.categories)) {
           data.categories = seedCategories();
+        } else {
+          // Sync isPublic values from seeds
+          const seeds = seedCategories();
+          data.categories = data.categories.map((c: any) => {
+            const seed = seeds.find(s => s.id === c.id);
+            return {
+              ...c,
+              isPublic: seed ? seed.isPublic : (c.isPublic !== undefined ? c.isPublic : false)
+            };
+          });
         }
         if (!data.files || !Array.isArray(data.files)) {
           data.files = seedUniversityFiles();
