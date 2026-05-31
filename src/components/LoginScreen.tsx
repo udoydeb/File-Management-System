@@ -21,6 +21,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { DEPARTMENTS } from '../data.js';
+import { supabase } from '../lib/supabase';
 
 interface LoginScreenProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -126,6 +127,44 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
     }
     setLoading(true);
     try {
+      // 1. Authenticate with Supabase Auth (or auto-fallback for seeded superadmin/pre-registered users)
+      let sessionToken = '';
+      let authenticatedEmail = loginId;
+
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: loginId,
+          password: loginPass
+        });
+        
+        if (authError) {
+          console.warn('Supabase Auth login rejected, trying backend sync:', authError.message);
+        } else if (authData.session) {
+          sessionToken = authData.session.access_token;
+          if (authData.session.user?.email) {
+            authenticatedEmail = authData.session.user.email;
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase Auth connection error:', err);
+      }
+
+      // 2. Fetch/match profile from Supabase 'profiles' table to check status/role
+      let supabaseProfile: any = null;
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', authenticatedEmail.toLowerCase().trim())
+          .maybeSingle();
+        if (profile) {
+          supabaseProfile = profile;
+        }
+      } catch (err) {
+        console.warn('Could not query profiles table, falling back:', err);
+      }
+
+      // 3. Keep backend session synchronized
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,14 +177,32 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       const data = await res.json();
       
       if (res.ok) {
+        // Core unified profile merges metadata with supabase fields
+        const finalUser = supabaseProfile ? { ...data.user, ...supabaseProfile } : data.user;
+
+        // Check if Approved!
+        if (finalUser.status && finalUser.status !== 'Approved') {
+          if (finalUser.status === 'Pending') {
+            notifyUser('Your registration request has been submitted successfully and is awaiting central registry administration approval.', 'error');
+          } else if (finalUser.status === 'Suspended') {
+            notifyUser('Your archive account has been suspended by the university administration.', 'error');
+          } else if (finalUser.status === 'Rejected') {
+            notifyUser('Your archive account registration request was rejected by administrative reviews.', 'error');
+          } else {
+            notifyUser(`Access restricted. Status: ${finalUser.status}`, 'error');
+          }
+          setLoading(false);
+          return;
+        }
+
         // Check if user has 2FA activated to intercept logons
-        if (data.user?.twoFactorEnabled) {
-          setTwoFACelebrationData({ token: data.token, user: data.user });
+        if (finalUser?.twoFactorEnabled) {
+          setTwoFACelebrationData({ token: sessionToken || data.token, user: finalUser });
           setShow2FAForm(true);
           notifyUser('Identity verification required: Enter 6-digit Authenticator PIN.', 'info');
         } else {
           notifyUser(data.message || 'Login successful!', 'success');
-          onLoginSuccess(data.token, data.user);
+          onLoginSuccess(sessionToken || data.token, finalUser);
         }
       } else {
         notifyUser(data.error || 'Authentication failed. Please verify credentials.', 'error');
@@ -186,6 +243,58 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
     setLoading(true);
     try {
+      const emailLower = email.toLowerCase().trim();
+
+      // 1. Supabase Auth Client Action
+      let supabaseUid = '';
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: emailLower,
+          password: password,
+        });
+        
+        if (authError) {
+          notifyUser(authError.message, 'error');
+          setLoading(false);
+          return;
+        }
+        if (authData.user) {
+          supabaseUid = authData.user.id;
+        }
+      } catch (err) {
+        console.warn('Supabase auth signup error:', err);
+      }
+
+      // 2. Insert/Sync to Supabase 'profiles' database table
+      const profileData = {
+        id: supabaseUid || `usr-${Math.random().toString(36).substr(2, 9)}`,
+        fullName: fullName.trim(),
+        employeeId: employeeId.trim().toUpperCase(),
+        departmentId: departmentId,
+        designation: designation.trim(),
+        email: emailLower,
+        phone: phone ? phone.trim() : '',
+        role: 'Viewer',
+        status: 'Pending',
+        profilePhoto: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+        emailVerified: false,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const { error: dbErr } = await supabase
+          .from('profiles')
+          .upsert([profileData]);
+        if (dbErr) {
+          console.warn('Could not upsert profile in Supabase table:', dbErr.message);
+        } else {
+          console.log('Successfully upserted user registration into profiles table!');
+        }
+      } catch (err) {
+        console.warn('Failed to interact with profiles table:', err);
+      }
+
+      // 3. Match and sync on Express backend database
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -201,7 +310,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       });
       const data = await res.json();
       if (res.ok) {
-        setPendingUserRecord(data.user);
+        setPendingUserRecord(profileData);
         setIsVerifyingEmail(true);
         // Simulate a real SMS/Email OTP code
         const code = Math.floor(100000 + Math.random() * 900000).toString();

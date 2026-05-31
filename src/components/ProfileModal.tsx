@@ -16,6 +16,7 @@ import {
   Award
 } from 'lucide-react';
 import { Employee, ServerAccessLog } from '../types.js';
+import { supabase } from '../lib/supabase.js';
 
 interface ProfileModalProps {
   currentUser: any;
@@ -90,6 +91,16 @@ export function ProfileModal({
     e.preventDefault();
     setLoading(true);
     try {
+      // Direct Supabase database update attempt
+      try {
+        await supabase
+          .from('profiles')
+          .update({ phone, designation, profilePhoto })
+          .eq('id', currentUser.id);
+      } catch (err) {
+        console.warn('Could not sync status update with Supabase profiles table:', err);
+      }
+
       const res = await fetch('/api/auth/profile/update', {
         method: 'POST',
         headers: {

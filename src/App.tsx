@@ -69,6 +69,7 @@ import { ProfileModal } from './components/ProfileModal.js';
 import { DocumentSystem } from './components/DocumentSystem.js';
 import { CabinetDirectory } from './components/CabinetDirectory.js';
 import { ScannedFolderPortal } from './components/ScannedFolderPortal.js';
+import { supabase } from './lib/supabase.js';
 
 // Safe sandbox-friendly localStorage helper
 const safeStorage = {
@@ -451,17 +452,47 @@ export default function App() {
         return;
       }
       try {
+        // 1. Query Supabase for active user and profile
+        let supabaseUserObj: any = null;
+        try {
+          const { data: { session: sbSession } } = await supabase.auth.getSession();
+          if (sbSession && sbSession.user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', sbSession.user.id)
+              .maybeSingle();
+            if (profile) {
+              supabaseUserObj = profile;
+            }
+          }
+        } catch (e) {
+          console.warn('Supabase session query bypassed:', e);
+        }
+
+        // 2. Fetch/Match Express Backend Session
         const res = await fetch('/api/auth/session', {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (res.ok) {
           const data = await res.json();
-          setCurrentUser(data.user);
+          // Prefer Supabase profiles table fields if present, else use backend session data
+          const finalUser = supabaseUserObj ? { ...data.user, ...supabaseUserObj } : data.user;
+          
+          setCurrentUser(finalUser);
           // Set department locks if not Super Admin
-          if (data.user.role !== 'Super Admin') {
-            setSelectedDeptId(data.user.departmentId);
+          if (finalUser.role !== 'Super Admin') {
+            setSelectedDeptId(finalUser.departmentId);
             // Select first category
-            const firstCat = categories.find(c => c.departmentId === data.user.departmentId);
+            const firstCat = categories.find(c => c.departmentId === finalUser.departmentId);
+            if (firstCat) setSelectedCategoryValue(firstCat.name);
+          }
+        } else if (supabaseUserObj) {
+          // If Express session is invalid but we have a valid Supabase Auth session, allow access
+          setCurrentUser(supabaseUserObj);
+          if (supabaseUserObj.role !== 'Super Admin') {
+            setSelectedDeptId(supabaseUserObj.departmentId);
+            const firstCat = categories.find(c => c.departmentId === supabaseUserObj.departmentId);
             if (firstCat) setSelectedCategoryValue(firstCat.name);
           }
         } else {
@@ -923,6 +954,16 @@ export default function App() {
   // Administrative actions
   const handleUpdateStatus = async (userId: string, status: string) => {
     try {
+      // Direct Supabase database update attempt
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status })
+          .eq('id', userId);
+      } catch (err) {
+        console.warn('Could not sync status update with Supabase profiles table:', err);
+      }
+
       const res = await fetch('/api/admin/employees/status', {
         method: 'POST',
         headers: {
@@ -945,6 +986,16 @@ export default function App() {
 
   const handleUpdateRole = async (userId: string, role: string) => {
     try {
+      // Direct Supabase database update attempt
+      try {
+        await supabase
+          .from('profiles')
+          .update({ role })
+          .eq('id', userId);
+      } catch (err) {
+        console.warn('Could not sync role update with Supabase profiles table:', err);
+      }
+
       const res = await fetch('/api/admin/employees/role', {
         method: 'POST',
         headers: {
