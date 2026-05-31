@@ -84,6 +84,60 @@ export interface DBStructure {
 
 const DB_FILE = path.join(process.cwd(), 'server_db.json');
 
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://msklqsezonxqdagkpjgr.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1za2xxc2V6b254cWRhZ2twamdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzE2NzgsImV4cCI6MjA5NTgwNzY3OH0.cI7LrrfIqmlyD7_xTGT_IahW8RZ7Uhi9mU6Sp5En9H8';
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+
+export async function pullFromSupabase(): Promise<DBStructure | null> {
+  try {
+    const { data, error } = await supabase
+      .from('diu_archive_state')
+      .select('value')
+      .eq('key', 'master_db')
+      .maybeSingle();
+
+    if (error) {
+      if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+        console.warn('Supabase Notice: Table "diu_archive_state" does not exist in your Supabase database.');
+      } else {
+        console.error('Supabase pull error:', error.message);
+      }
+      return null;
+    }
+
+    if (data && data.value) {
+      console.log('Successfully loaded DIU persistent state database from Supabase cloud!');
+      return data.value as DBStructure;
+    }
+  } catch (err) {
+    console.error('Supabase query failed:', err);
+  }
+  return null;
+}
+
+export async function pushToSupabase(data: DBStructure): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('diu_archive_state')
+      .upsert({ key: 'master_db', value: data });
+
+    if (error) {
+      if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+        console.warn('Supabase Alert: Cannot push system state. Please create the PostgreSQL table "diu_archive_state" inside Supabase with matching columns: "key" TEXT PRIMARY KEY, "value" JSONB');
+      } else {
+        console.error('Supabase upsert error:', error.message);
+      }
+    } else {
+      console.log('Successfully pushed and synchronized central DIU database with Supabase cloud!');
+    }
+  } catch (err) {
+    console.error('Supabase upload exception:', err);
+  }
+}
+
 // Hashing helper
 export function hashPassword(password: string, salt: string): string {
   return crypto.createHash('sha256').update(password + salt).digest('hex');
@@ -380,8 +434,10 @@ export function readDB(): DBStructure {
 export function writeDB(data: DBStructure): void {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    // Asynchronously push updates into Supabase cloud state
+    pushToSupabase(data).catch(err => console.error('Supabase async push background failed:', err));
   } catch (err) {
-    console.error('Failed to write DB file', err);
+    console.error('Failed to write local DB file', err);
   }
 }
 

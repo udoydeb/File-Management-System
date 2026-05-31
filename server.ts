@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { handleAPIRoute } from './server_routes.js';
+import { pullFromSupabase, saveChanges } from './server_db.js';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 
@@ -14,6 +15,23 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Synchronise system state with Supabase cloud database on startup
+  try {
+    console.log('Initiating boot-time sync with Supabase cloud database...');
+    pullFromSupabase().then((cloudData) => {
+      if (cloudData) {
+        saveChanges(cloudData);
+        console.log('DIU system state synchronized successfully with Supabase Cloud!');
+      } else {
+        console.log('DIU system state running on local cache (Supabase database table is empty or does not exist yet).');
+      }
+    }).catch((err: any) => {
+      console.warn('Supabase initial fetch failed. Falling back to local database.', err.message);
+    });
+  } catch (err) {
+    console.error('Supabase boot-up controller encountered an exception:', err);
+  }
 
   // Set up body parsing middlewares
   app.use(express.json({ limit: '50mb' }));
