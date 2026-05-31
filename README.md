@@ -153,34 +153,91 @@ The backend server exposes the following highly secure, authenticated REST endpo
 
 ## 🚀 Production Deployment Instructions
 
-### 🌐 Deploying to Vercel (Front-end + API Routes Serverless)
-Vercel supports serverless execution of server.ts.
-1.  **Install Vercel CLI:** `npm i -g vercel`
-2.  **Define Serverless configurations:** We bundle Vite builds inside `dist/`. Ensure our project uses the following `vercel.json` structure inside the root:
-    ```json
-    {
-      "version": 2,
-      "builds": [
-        { "src": "dist/server.cjs", "use": "@vercel/node" },
-        { "src": "dist/**/*", "use": "@vercel/static" }
-      ],
-      "routes": [
-        { "src": "/api/(.*)", "dest": "dist/server.cjs" },
-        { "src": "/(.*)", "dest": "dist/$1" }
-      ]
-    }
-    ```
-3.  **Deploy:** Run `vercel` and input environment variables matching `.env.example`.
+This repository is optimized to perform seamlessly under two major architectural modes:
+1. **Co-located Full-stack Application** (Default - easily hosted on **Render**, **Heroku**, or **Localhost**): The Express backend serves as the single unified web server, hosting APIs and serving production static react code.
+2. **Decoupled Frontend & Backend** (Great performance - **Vite SPA on Vercel** and **Express APIs on Render**): Cross-Origin Resource Sharing (CORS) is enabled out-of-the-box (`*`), allowing the static frontend on Vercel to fetch from the back-end dynamically.
 
-### 🛡️ Deploying to Render (Host Platform as Web Service)
-Render is perfect for continuous full-stack Node container hosting:
-1.  **Create New Service:** Inside Render Dashboard, choose **`Web Service`** and connect your Github repository.
-2.  **Select Runtimes:** Set Language to **`Node`**.
-3.  **Define Scripts:**
-    -   **Build Command:** `npm run build`
-    -   **Start Command:** `npm start`
-4.  **Configure Environment Variables:** Add `GEMINI_API_KEY` and `NODE_ENV=production` inside your Render dashboard settings workspace.
-5.  **Enable Storage (Optional):** Define a persistent disk mounted to `/app/` if you want file registry changes on `server_db.json` to persist permanently across container cold-starts.
+---
+
+### 📦 GitHub Repository Preparation
+
+To commit this project as a secure, optimized GitHub repository:
+1. **Repository Init & Tracking**:
+   ```bash
+   git init
+   git add .
+   git commit -m "feat: initial release of DIU Smart Archive"
+   ```
+2. **Review .gitignore Rules**: Ensure files containing mock DB caching (`server_db.json` is okay for default seeding) and local secrets (`.env`, `.env.local`) are excluded from pushes.
+3. **Pristine Build Alignment**: Verify that no type check failures or code warnings persist before tracking:
+   ```bash
+   npm run lint
+   npm run build
+   ```
+
+---
+
+### 🌐 Decoupled Deployment Pathway: Frontend Static Client (Vercel)
+
+Vercel provides blazing fast Edge-CDN delivery for the React static Single Page Application (SPA):
+1. **Setup on Vercel Dashboard**:
+   - Create a **New Project** and connect your GitHub Repository.
+   - Set **Framework Preset** to **Vite** or **Other**.
+   - **Root Directory**: `./` (Root)
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+2. **Configure Environment Variables on Vercel**:
+   Add the following variables in the Project Settings:
+   - `VITE_API_URL`: Your deployed Render Backend Server URL (e.g. `https://diu-archive-api.onrender.com`)
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your cloud Supabase project instance URL.
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your cloud Supabase anonymous API key.
+3. **Deployment Router (SPA Handlers)**:
+   Our pre-configured `/vercel.json` ensures that page reloads on custom paths (like `/scanned-portal`) do not return a `404 Not Found` by cleanly routing fallbacks to `index.html`.
+
+---
+
+### 🛡️ Unified Server / Decoupled APi Deployment: Backend Server (Render)
+
+Render hosts the continuous, full-time Node Express API engine seamlessly:
+1. **Configure Web Service on Render**:
+   - Log in to the Render Dashboard, click **New** -> **Web Service**.
+   - Connect your GitHub Repository containing this project.
+2. **Runtime Configurations**:
+   - **Language**: `Node`
+   - **Build Command**: `npm run build`
+   - **Start Command**: `npm run start` (Express starts on port `3000`)
+3. **Environment Workspace Variable Setup**:
+   Add these variable key-values in Render's configuration workspace:
+   - `NODE_ENV`: `production`
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase API cluster URL.
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your high-privilege service key (keeps backend database synchronized in real-time).
+   - `GEMINI_API_KEY`: Your Google GenAI key for OCR structuring parsing and smart searches.
+   - `JWT_SECRET`: A secure private phrase for verifying logged-out tokens.
+4. **Persistent Disk Sync (Optional)**:
+   If you aren't using Supabase DB mirroring and wish to persist the offline server file-cache `server_db.json`, mount a **Persistent Disk** on Render formatted to `/app/` with a size of 1GB.
+
+---
+
+### 💻 Localhost Production Launch
+
+To simulate the exact production state right on your development machine or intranet:
+1. **Install Prerequisites**: Obtain Node.js LTS (v18+) and npm.
+2. **Build the Entire Project**:
+   ```bash
+   npm run build
+   ```
+   This compiles the React modules to `dist/`, and bundles the TypeScript backend `server.ts` into a self-contained, light-weight execution node `/dist/server.cjs` via highly optimized `esbuild`.
+3. **Set Production Mode**:
+   ```bash
+   export NODE_ENV=production
+   # or on Windows PowerShell:
+   # $env:NODE_ENV="production"
+   ```
+4. **Boot Up**:
+   ```bash
+   npm run start
+   ```
+   The site will load instantly via production assets on **`http://localhost:3000`**.
 
 ---
 

@@ -9,8 +9,30 @@ import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Resolve paths safely for both standard ES Modules (tsx in dev) and bundled CJS (node in production)
+let _filename = '';
+let _dirname = '';
+try {
+  if (typeof __filename !== 'undefined') {
+    _filename = __filename;
+  } else {
+    _filename = fileURLToPath(import.meta.url);
+  }
+} catch (e) {
+  _filename = '';
+}
+
+try {
+  if (typeof __dirname !== 'undefined') {
+    _dirname = __dirname;
+  } else if (_filename) {
+    _dirname = path.dirname(_filename);
+  } else {
+    _dirname = process.cwd();
+  }
+} catch (e) {
+  _dirname = process.cwd();
+}
 
 async function startServer() {
   const app = express();
