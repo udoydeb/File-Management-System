@@ -70,6 +70,7 @@ import { DocumentSystem } from './components/DocumentSystem.js';
 import { CabinetDirectory } from './components/CabinetDirectory.js';
 import { ScannedFolderPortal } from './components/ScannedFolderPortal.js';
 import { supabase } from './lib/supabase.js';
+import { getApiUrl } from './lib/api.js';
 
 // Safe sandbox-friendly localStorage helper
 const safeStorage = {
@@ -471,7 +472,7 @@ export default function App() {
         }
 
         // 2. Fetch/Match Express Backend Session
-        const res = await fetch('/api/auth/session', {
+        const res = await fetch(getApiUrl('/api/auth/session'), {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (res.ok) {
@@ -518,8 +519,8 @@ export default function App() {
     try {
       const authHeader = { 'Authorization': `Bearer ${authToken}` };
       
-      const employeesRes = await fetch('/api/admin/employees', { headers: authHeader });
-      const logsRes = await fetch('/api/admin/logs', { headers: authHeader });
+       const employeesRes = await fetch(getApiUrl('/api/admin/employees'), { headers: authHeader });
+       const logsRes = await fetch(getApiUrl('/api/admin/logs'), { headers: authHeader });
 
       if (employeesRes.ok && logsRes.ok) {
         const empData = await employeesRes.json();
@@ -642,7 +643,7 @@ export default function App() {
   useEffect(() => {
     const fetchUniversityData = async () => {
       try {
-        const catRes = await fetch('/api/categories');
+        const catRes = await fetch(getApiUrl('/api/categories'));
         if (catRes.ok) {
           const catData = await catRes.json();
           if (catData.categories && catData.categories.length > 0) {
@@ -650,7 +651,7 @@ export default function App() {
           }
         }
         
-        const filesRes = await fetch('/api/files');
+        const filesRes = await fetch(getApiUrl('/api/files'));
         if (filesRes.ok) {
           const filesData = await filesRes.json();
           if (filesData.files && filesData.files.length > 0) {
@@ -669,7 +670,7 @@ export default function App() {
   // Perform Log Out
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch(getApiUrl('/api/auth/logout'), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
@@ -964,7 +965,7 @@ export default function App() {
         console.warn('Could not sync status update with Supabase profiles table:', err);
       }
 
-      const res = await fetch('/api/admin/employees/status', {
+      const res = await fetch(getApiUrl('/api/admin/employees/status'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -996,7 +997,7 @@ export default function App() {
         console.warn('Could not sync role update with Supabase profiles table:', err);
       }
 
-      const res = await fetch('/api/admin/employees/role', {
+      const res = await fetch(getApiUrl('/api/admin/employees/role'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1027,7 +1028,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('/api/categories', {
+      const response = await fetch(getApiUrl('/api/categories'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1119,7 +1120,7 @@ export default function App() {
     }, 250);
 
     try {
-      const res = await fetch('/api/gemini/analyze', {
+      const res = await fetch(getApiUrl('/api/gemini/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1163,7 +1164,7 @@ export default function App() {
       setFiles(prev => [nextFile, ...prev]);
       
       // Persist scan to Express DB asynchronously
-      fetch('/api/files', {
+      fetch(getApiUrl('/api/files'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1213,7 +1214,7 @@ export default function App() {
         // Mark item as processing
         setBulkQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'processing', progress: 35 } : f));
         
-        const res = await fetch('/api/gemini/analyze', {
+        const res = await fetch(getApiUrl('/api/gemini/analyze'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1256,7 +1257,7 @@ export default function App() {
         setFiles(prev => [nextFile, ...prev]);
         
         // Push bulk scanning target to background server db
-        fetch('/api/files', {
+        fetch(getApiUrl('/api/files'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1327,7 +1328,7 @@ export default function App() {
         ? files 
         : files.filter(f => f.department === currentUser.departmentId);
 
-      const res = await fetch('/api/gemini/smart-search', {
+      const res = await fetch(getApiUrl('/api/gemini/smart-search'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1414,7 +1415,7 @@ export default function App() {
     setFiles(prev => prev.map(f => f.id === linkedFile.id ? updatedFile : f));
 
     // Sync checkout state to Express DB
-    fetch('/api/files', {
+    fetch(getApiUrl('/api/files'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1449,7 +1450,7 @@ export default function App() {
       setFiles(prev => prev.map(f => f.id === linkedChk.fileId ? updatedFile : f));
       
       // Update check-in state to Express db
-      fetch('/api/files', {
+      fetch(getApiUrl('/api/files'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

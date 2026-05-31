@@ -229,7 +229,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
         // Check if Approved!
         if (finalUser.status && finalUser.status !== 'Approved') {
           if (finalUser.status === 'Pending') {
-            notifyUser('Your registration request has been submitted successfully and is awaiting central registry administration approval.', 'error');
+            notifyUser('Your account is awaiting administration approval.', 'error');
           } else if (finalUser.status === 'Suspended') {
             notifyUser('Your archive account has been suspended by the university administration.', 'error');
           } else if (finalUser.status === 'Rejected') {
