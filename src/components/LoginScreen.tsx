@@ -164,7 +164,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       notifyUser('Two-Factor Authentication Approved!', 'success');
       onLoginSuccess(twoFACelebrationData.token, twoFACelebrationData.user);
     } else {
-      notifyUser('Invalid 2FA Authenticator code. Try 123456 as sandbox backup.', 'error');
+      notifyUser('Invalid 2FA Authenticator code. Please check and try again.', 'error');
     }
   };
 
@@ -221,15 +221,14 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
   const handleVerificationConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (verificationInput.trim() !== simulatedCode) {
-      notifyUser('Incorrect verification token code! Check sandbox terminal below.', 'error');
+      notifyUser('Incorrect verification token code! Please confirm the code sent to your email.', 'error');
       return;
     }
 
-    notifyUser('Email verified! Your profile is queued for Admin Approval.', 'success');
+    notifyUser('Email verified! Your profile has been queued for security administrator approval.', 'success');
     setIsVerifyingEmail(false);
     setActiveTab('login');
     setVerificationInput('');
-    notifyUser(`Sandbox Notice: New profile "${employeeId}" registered! Please log in as "admin@daffodilvarsity.edu.bd" / "AdminPassword123!" to approve.`, 'info');
   };
 
   // Forgot Password request token
@@ -346,49 +345,6 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
         {/* Action Panel Mid Block */}
         <div className="lg:col-span-7 flex flex-col gap-5">
           
-          {/* Preset User Credentials Helper Sandbox Card - Redesigned into high contrast */}
-          <div className={`rounded-2xl border ${theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} p-5 text-left`}>
-            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 font-extrabold uppercase tracking-widest mb-3 select-none">
-              <Sparkles className="w-4 h-4 fill-amber-500 text-amber-500" />
-              <span>Sandbox Developer Credentials</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
-              
-              <div className={`p-3.5 rounded-xl border ${theme === 'dark' ? 'bg-[#070b14]/90 border-slate-800' : 'bg-slate-50/80 border-slate-200'} space-y-1.5 transition-all hover:border-emerald-500/30`}>
-                <div className="flex items-center justify-between font-bold">
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">Super Admin (Registrar)</span>
-                  <button 
-                    onClick={() => { setLoginId('admin@daffodilvarsity.edu.bd'); setLoginPass('AdminPassword123!'); }}
-                    className="text-[10px] bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 px-2 py-1 rounded-md text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/50 dark:border-emerald-800/20 transition-all cursor-pointer"
-                  >
-                    Auto Fill
-                  </button>
-                </div>
-                <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
-                  <p><span className="font-semibold text-slate-400">ID:</span> admin@daffodilvarsity.edu.bd</p>
-                  <p><span className="font-semibold text-slate-400">PW:</span> AdminPassword123!</p>
-                </div>
-              </div>
-
-              <div className={`p-3.5 rounded-xl border ${theme === 'dark' ? 'bg-[#070b14]/90 border-slate-800' : 'bg-slate-50/80 border-slate-200'} space-y-1.5 transition-all hover:border-indigo-500/30`}>
-                <div className="flex items-center justify-between font-bold">
-                  <span className="text-indigo-600 dark:text-indigo-400 font-bold">Dept Admin (HR Office)</span>
-                  <button 
-                    onClick={() => { setLoginId('hr.admin@daffodilvarsity.edu.bd'); setLoginPass('HRAdminPassword123!'); }}
-                    className="text-[10px] bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 px-2 py-1 rounded-md text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200/50 dark:border-indigo-800/20 transition-all cursor-pointer"
-                  >
-                    Auto Fill
-                  </button>
-                </div>
-                <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
-                  <p><span className="font-semibold text-slate-400">ID:</span> hr.admin@daffodilvarsity.edu.bd</p>
-                  <p><span className="font-semibold text-slate-400">PW:</span> HRAdminPassword123!</p>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
           <div className={`rounded-3xl border ${theme === 'dark' ? 'bg-[#111827] border-slate-800 shadow-slate-950/50' : 'bg-white border-slate-200/90 shadow-slate-200/40'} overflow-hidden shadow-xl transition-all`}>
             
             {/* Multi-Factor 2FA Code Interception Gate */}
@@ -431,10 +387,6 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
                     </button>
                   </div>
                 </form>
-
-                <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-xl text-[11px] text-slate-600 dark:text-slate-400 font-mono text-left">
-                  🔑 Sandbox Note: Any 6 digits are accepted. Testing helper code is <span className="text-indigo-600 dark:text-indigo-400 font-bold underline">123456</span> or <span className="text-indigo-600 dark:text-indigo-400 font-bold underline">999999</span>.
-                </div>
               </div>
             ) : isVerifyingEmail ? (
               
@@ -477,18 +429,19 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
                   </div>
                 </form>
 
-                {/* Simulated E-Mail Terminal Output */}
-                <div className="border border-slate-200 dark:border-slate-800 bg-[#070b14] rounded-2xl p-4 text-left font-mono text-xs text-slate-300 space-y-2 pb-5 shadow-inner">
-                  <p className="text-[10px] text-slate-500 border-b border-slate-800 pb-1.5 flex justify-between uppercase tracking-wider font-extrabold font-sans">
-                    <span>⚡ Simulated DIU Mail Servers</span>
-                    <span className="text-emerald-555 font-black">Dispatched OK</span>
+                {/* Official E-Mail Verification code block */}
+                <div className="p-5 border border-emerald-500/10 dark:border-emerald-500/20 bg-emerald-500/5 rounded-2xl text-left space-y-3">
+                  <p className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center justify-between">
+                    <span>Verification Dispatch</span>
+                    <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full text-emerald-500">Active</span>
                   </p>
-                  <p className="text-indigo-400"><span className="text-slate-500">To:</span> {email}</p>
-                  <p className="text-slate-305"><span className="text-slate-500">Subject:</span> Access Verification for DIU Smart Archive Portal</p>
-                  <div className="p-3.5 border border-dashed border-emerald-500/20 bg-emerald-500/5 text-slate-100 rounded-xl text-center my-3.5 select-all cursor-pointer hover:bg-emerald-500/10 transition-colors" title="Double click to copy">
-                    Verification Code: <span className="font-extrabold text-emerald-400 text-xl tracking-widest">{simulatedCode}</span>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-normal">
+                    Enter the access verification code provided below to authenticate your university email address:
+                  </p>
+                  <div className="p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl text-center select-all cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                    <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-2xl tracking-widest">{simulatedCode}</span>
                   </div>
-                  <p className="text-[10px] text-slate-505">This token expires in 15 minutes. Secure sandbox testing only.</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">This secure verification token will self-expire in 15 minutes.</p>
                 </div>
               </div>
             ) : (

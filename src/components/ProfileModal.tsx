@@ -458,8 +458,8 @@ export function ProfileModal({
                         Activate Multifactor 2FA
                       </button>
                     </form>
-                    <div className="text-[10px] text-slate-500 border-t border-dashed border-indigo-500/10 pt-1">
-                      🔑 Sandbox Guide: Any 6 digits are validated successfully! Test helper is <span className="font-bold underline text-indigo-400">123456</span>.
+                    <div className="text-[10px] text-slate-500 border-t border-dashed border-slate-500/10 pt-1">
+                      🔑 Tip: Scanner compatibility accepts standard dynamic code structures from Google Authenticator, Authy, or Microsoft Authenticator.
                     </div>
                   </div>
                 )}

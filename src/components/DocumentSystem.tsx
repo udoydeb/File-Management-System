@@ -1209,7 +1209,7 @@ export function DocumentSystem({
                         <div className="flex items-center gap-1">
                           <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
-                            Sandbox OCR Templates
+                            Sample Document Scans
                           </p>
                         </div>
                         
