@@ -1,4 +1,4 @@
-import { getDB, saveChanges, hashPassword, generateSalt, User, AccessLog } from './server_db.js';
+import { getDB, saveChanges, hashPassword, generateSalt, User, AccessLog, supabase } from './server_db.js';
 import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
 
@@ -346,6 +346,53 @@ export async function handleAPIRoute(req: any, res: any, next: () => void): Prom
 
       db.users.push(newUser);
       saveChanges(db);
+
+      // Secure, serverside-bypass database sync to Supabase individual tables profiles and users
+      const profileData = {
+        id: newUser.id,
+        fullName: newUser.fullName,
+        full_name: newUser.fullName,
+        employeeId: newUser.employeeId,
+        employee_id: newUser.employeeId,
+        departmentId: newUser.departmentId,
+        department_id: newUser.departmentId,
+        department: newUser.departmentId,
+        designation: newUser.designation,
+        email: newUser.email,
+        phone: newUser.phone,
+        role: newUser.role,
+        status: newUser.status,
+        profilePhoto: newUser.profilePhoto,
+        profile_photo: newUser.profilePhoto,
+        emailVerified: newUser.emailVerified,
+        email_verified: newUser.emailVerified,
+        createdAt: newUser.createdAt,
+        created_at: newUser.createdAt
+      };
+
+      try {
+        console.log('[BACKEND REGSYNC] Inserting into profiles table:', newUser.id);
+        const { error: pErr } = await supabase.from('profiles').upsert([profileData]);
+        if (pErr) {
+          console.warn('[BACKEND REGSYNC] Failed upserting to Supabase profiles table:', pErr.message);
+        } else {
+          console.log('[BACKEND REGSYNC] Successfully synchronized user request to Supabase profiles table.');
+        }
+      } catch (err: any) {
+        console.error('[BACKEND REGSYNC] Exception syncing to profiles table:', err.message || err);
+      }
+
+      try {
+        console.log('[BACKEND REGSYNC] Inserting into users table:', newUser.id);
+        const { error: uErr } = await supabase.from('users').upsert([profileData]);
+        if (uErr) {
+          console.warn('[BACKEND REGSYNC] Failed upserting to Supabase users table:', uErr.message);
+        } else {
+          console.log('[BACKEND REGSYNC] Successfully synchronized user request to Supabase users table.');
+        }
+      } catch (err: any) {
+        console.error('[BACKEND REGSYNC] Exception syncing to users table:', err.message || err);
+      }
 
       recordAccessLog(
         'SIGNUP_SUBMITTED', 

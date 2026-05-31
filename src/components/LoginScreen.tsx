@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { DEPARTMENTS } from '../data.js';
 import { supabase } from '../lib/supabase';
+import { getApiUrl } from '../lib/api.js';
 
 interface LoginScreenProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -95,7 +96,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
     // Auto login as pre-seeded administrator
     setTimeout(async () => {
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(getApiUrl('/api/auth/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -210,7 +211,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       }
 
       // 3. Keep backend session synchronized
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,8 +272,10 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
   };
 
   // Submit sign up
-  const handleSignupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignupSubmit = async (e?: React.SyntheticEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     if (!fullName || !employeeId || !designation || !email || !password || !confirmPassword) {
       notifyUser('Please fill in all required setup details.', 'error');
       return;
@@ -306,6 +309,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
           email: emailLower,
           password: password,
           options: {
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
             data: {
               fullName: fullName.trim(),
               full_name: fullName.trim(),
@@ -352,6 +356,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
         employee_id: employeeId.trim().toUpperCase(),
         departmentId: departmentId,
         department_id: departmentId,
+        department: departmentId,
         designation: designation.trim(),
         email: emailLower,
         phone: phone ? phone.trim() : '',
@@ -395,7 +400,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
       // 3. Match and sync on Express backend database
       console.log('[DEBUG SIGNUP] Syncing to Express local persistence database...', { emailLower, id });
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(getApiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -439,7 +444,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/verify-registration-email', {
+      const res = await fetch(getApiUrl('/api/auth/verify-registration-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -469,7 +474,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset-password-request', {
+      const res = await fetch(getApiUrl('/api/auth/reset-password-request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrEmpId: forgotInput })
@@ -498,7 +503,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(getApiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -826,10 +831,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
                       {activeTab === 'signup' && (
                         <form
-                          onSubmit={signupSubmitHook => {
-                            signupSubmitHook.preventDefault();
-                            handleSignupSubmit(signupSubmitHook);
-                          }}
+                          onSubmit={handleSignupSubmit}
                           className="space-y-4 text-left"
                         >
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1006,6 +1008,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
 
                           <button
                             type="submit"
+                            onClick={handleSignupSubmit}
                             disabled={loading}
                             className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-750 hover:from-emerald-500 hover:to-teal-650 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2"
                           >
