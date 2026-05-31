@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Employee, ServerAccessLog } from '../types.js';
 import { supabase } from '../lib/supabase.js';
+import { getApiUrl } from '../lib/api.js';
 
 interface ProfileModalProps {
   currentUser: any;
@@ -70,7 +71,7 @@ export function ProfileModal({
   useEffect(() => {
     const fetchMyLogs = async () => {
       try {
-        const res = await fetch('/api/admin/logs', {
+        const res = await fetch(getApiUrl('/api/admin/logs'), {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (res.ok) {
@@ -101,7 +102,7 @@ export function ProfileModal({
         console.warn('Could not sync status update with Supabase profiles table:', err);
       }
 
-      const res = await fetch('/api/auth/profile/update', {
+      const res = await fetch(getApiUrl('/api/auth/profile/update'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +133,7 @@ export function ProfileModal({
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/profile/password', {
+      const res = await fetch(getApiUrl('/api/auth/profile/password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

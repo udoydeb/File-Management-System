@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { motion, AnimatePresence } from 'motion/react';
+import { getApiUrl } from '../lib/api.js';
 
 interface UniversityFile {
   id: string;
@@ -178,7 +179,7 @@ export function ScannedFolderPortal({
 
     setAuthBusy(true);
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
