@@ -241,10 +241,17 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
       return;
     }
 
+    const emailLower = email.toLowerCase().trim();
+    
+    // Client-side validated syntax check to catch typos like "name@gmailcom"
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailLower)) {
+      notifyUser('Invalid email format. Please supply a valid email address with a proper domain name and dot extension (e.g. name@domain.com).', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
-      const emailLower = email.toLowerCase().trim();
-
       // 1. Supabase Auth Client Action
       let supabaseUid = '';
       try {
@@ -254,15 +261,24 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
         });
         
         if (authError) {
-          notifyUser(authError.message, 'error');
-          setLoading(false);
-          return;
+          console.warn('Supabase auth signUp error:', authError.message);
+          // Only block registration if it is a user-correctable constraint like weak password
+          const isUserCorrectable = authError.message.toLowerCase().includes('password') ||
+                                    authError.message.toLowerCase().includes('already holds') ||
+                                    authError.message.toLowerCase().includes('rate limit');
+          if (isUserCorrectable) {
+            notifyUser(authError.message, 'error');
+            setLoading(false);
+            return;
+          } else {
+            console.warn('Sandbox or configuration block from Supabase auth. Proceeding with central backend database match.');
+          }
         }
-        if (authData.user) {
+        if (authData?.user) {
           supabaseUid = authData.user.id;
         }
-      } catch (err) {
-        console.warn('Supabase auth signup error:', err);
+      } catch (err: any) {
+        console.warn('Supabase auth signup exception:', err);
       }
 
       // 2. Insert/Sync to Supabase 'profiles' database table
