@@ -130,11 +130,11 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
     try {
       // 1. Authenticate with Supabase Auth (or auto-fallback for seeded superadmin/pre-registered users)
       let sessionToken = '';
-      let authenticatedEmail = loginId;
+      let authenticatedEmail = loginId.trim();
 
       try {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: loginId,
+          email: loginId.trim().toLowerCase(),
           password: loginPass
         });
         
@@ -215,7 +215,7 @@ export function LoginScreen({ onLoginSuccess, notifyUser, theme }: LoginScreenPr
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          emailOrEmpId: loginId,
+          emailOrEmpId: loginId.trim(),
           password: loginPass,
           rememberMe
         })

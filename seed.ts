@@ -129,6 +129,29 @@ export async function seed() {
     if (existingAuth) {
       console.log(`User already exists in Supabase Auth with ID: ${existingAuth.id}`);
       authUserId = existingAuth.id;
+      if (supabaseAdmin) {
+        try {
+          console.log(`Force-updating existing Auth user credentials and metadata for: ${emailLower}`);
+          const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(existingAuth.id, {
+            password: demo.password,
+            email_confirm: true,
+            user_metadata: {
+              fullName: demo.fullName,
+              employeeId: demo.employeeId,
+              role: demo.role,
+              departmentId: demo.departmentId,
+              status: demo.status
+            }
+          });
+          if (updateError) {
+            console.warn(`Failed to sync existing auth user details:`, updateError.message);
+          } else {
+            console.log(`Successfully synced existing auth user password and attributes.`);
+          }
+        } catch (updateErr: any) {
+          console.warn(`Exception force-updating existing user credentials:`, updateErr.message || updateErr);
+        }
+      }
     } else {
       // User does not exist, let's create them!
       if (supabaseAdmin) {
